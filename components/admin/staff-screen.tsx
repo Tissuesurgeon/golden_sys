@@ -32,7 +32,7 @@ export function StaffScreen() {
     <div>
       <PageHeader
         title="Staff"
-        description="Administrators, the bursar, and teachers. An invitation in this preview marks the account as invited."
+        description="Administrators, the bursar, and teachers. An invited account can sign in after a reset link is issued."
         actions={<Button onClick={() => setInviteOpen(true)}>Invite staff</Button>}
       />
       <Surface>
@@ -89,7 +89,7 @@ export function StaffScreen() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Invite staff</DialogTitle>
-            <DialogDescription>No email is sent. The person appears as invited in this preview.</DialogDescription>
+            <DialogDescription>No email is sent. Issue a reset link from Users and Permissions so this person can choose a password.</DialogDescription>
           </DialogHeader>
           <form
             className="space-y-3"

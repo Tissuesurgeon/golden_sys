@@ -165,7 +165,7 @@ export function AssessmentConfigScreen() {
               } else {
                 dispatch({ type: "add-config", year: state.year, term: state.term, classId, subjectId, components });
               }
-              setSaved("Assessment saved in this preview.");
+              setSaved("Assessment saved.");
             }}
           >
             Save assessment

@@ -23,6 +23,7 @@ export function ResultsReview() {
   const [reason, setReason] = useState("");
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [error, setError] = useState("");
   const sheet = state.sheets.find((item) => item.id === sheetId);
   const config = sheet ? configForSheet(state, sheet) : null;
 
@@ -104,13 +105,20 @@ export function ResultsReview() {
                 </tbody>
               </table>
             </div>
+            {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
             {note ? <p className="mt-3 text-sm text-success">{note}</p> : null}
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 type="button"
                 disabled={sheet.status !== "submitted" || warnings.length > 0}
-                onClick={() => {
-                  dispatch({ type: "approve-marks", sheetId: sheet.id });
+                onClick={async () => {
+                  setError("");
+                  const message = await dispatch({ type: "approve-marks", sheetId: sheet.id });
+                  if (message) {
+                    setNote("");
+                    setError(message);
+                    return;
+                  }
                   setNote("Results approved. They are not published yet.");
                 }}
               >
@@ -135,9 +143,14 @@ export function ResultsReview() {
           <Button
             type="button"
             disabled={reason.trim().length < 8 || !sheet}
-            onClick={() => {
+            onClick={async () => {
               if (!sheet) return;
-              dispatch({ type: "return-marks", sheetId: sheet.id, reason: reason.trim() });
+              setError("");
+              const message = await dispatch({ type: "return-marks", sheetId: sheet.id, reason: reason.trim() });
+              if (message) {
+                setError(message);
+                return;
+              }
               setNote("Returned to the teacher.");
               setReason("");
               setOpen(false);

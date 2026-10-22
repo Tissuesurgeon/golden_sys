@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { LinkButton, PageHeader, SampleNotice, StatusBadge, Surface, selectClassName } from "@/components/common/ui-bits";
+import { LinkButton, PageHeader, StatusBadge, Surface, selectClassName } from "@/components/common/ui-bits";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -103,25 +103,28 @@ export function RecordPayment() {
     setStep((value) => value + 1);
   }
 
-  function confirm() {
+  async function confirm() {
     if (!student) return;
-    const id = `pay-sample-${state.receiptSequence + 1}`;
-    const receiptNumber = `GCS-SAMPLE-${String(state.receiptSequence + 1).padStart(4, "0")}`;
-    dispatch({
+    const id = `pay-${student.id}-${state.payments.length + 1}`;
+    const errorMessage = await dispatch({
       type: "record-payment",
       payment: {
         id,
-        receiptNumber,
+        receiptNumber: "",
         studentId: student.id,
         date,
         method,
         reference: reference.trim(),
         amount: pesewas,
         allocations: allocation,
-        recordedBy: staff?.id ?? "stf-kwame",
-        sample: true,
+        recordedBy: staff?.id ?? "",
+        sample: false,
       },
     });
+    if (errorMessage) {
+      setError(errorMessage);
+      return;
+    }
     setReceiptId(id);
     setStep(5);
   }
@@ -246,7 +249,7 @@ export function RecordPayment() {
         {step === 4 ? (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold text-navy">Review allocation</h2>
-            <SampleNotice>Sample receipt — not a school record. Confirming updates this browser preview only.</SampleNotice>
+            <p className="text-sm text-muted-foreground">Recorded by the school. Not verified by a payment gateway.</p>
             <dl className="grid gap-2 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-muted-foreground">Amount</dt>
@@ -273,10 +276,9 @@ export function RecordPayment() {
 
         {step === 5 && receiptId ? (
           <div className="space-y-4">
-            <SampleNotice>Sample receipt — not a school record.</SampleNotice>
-            <h2 className="text-lg font-semibold text-navy">Preview receipt is ready</h2>
-            <p className="text-sm text-muted-foreground">The payment exists only in this browser. Open the receipt to review the print layout.</p>
-            <LinkButton href={`/fees/receipts/${receiptId}`}>View sample receipt</LinkButton>
+            <h2 className="text-lg font-semibold text-navy">Receipt is ready</h2>
+            <p className="text-sm text-muted-foreground">The payment is stored on the student account. Open the receipt to print it.</p>
+            <LinkButton href={`/fees/receipts/${receiptId}`}>View receipt</LinkButton>
           </div>
         ) : null}
 
@@ -293,7 +295,7 @@ export function RecordPayment() {
               </Button>
             ) : (
               <Button type="button" onClick={confirm}>
-                Confirm sample payment
+                Confirm payment
               </Button>
             )}
           </div>

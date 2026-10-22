@@ -1,0 +1,494 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  administrator
+  bursar
+  teacher
+}
+
+enum StudentStatus {
+  pending
+  active
+  transferred
+  withdrawn
+  graduated
+}
+
+enum ApplicationStatus {
+  draft
+  submitted
+  under_review
+  accepted
+  waitlisted
+  rejected
+  deferred
+  enrolled
+}
+
+enum InvoiceStatus {
+  draft
+  issued
+  partial
+  paid
+  overdue
+  cancelled
+  reversed
+}
+
+enum InvoiceKind {
+  admission
+  school_fee
+}
+
+enum PaymentMethod {
+  cash
+  mobile_money
+  bank_transfer
+  other
+}
+
+enum SheetStatus {
+  draft
+  submitted
+  returned
+  approved
+  published
+}
+
+enum EnrollmentPolicy {
+  full_or_waiver
+  minimum_deposit
+  waiver_only
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String
+  passwordHash String
+  role         Role
+  active       Boolean         @default(true)
+  staffId      String?         @unique
+  staff        Staff?          @relation(fields: [staffId], references: [id])
+  sessions     Session[]
+  resets       PasswordReset[]
+  audits       AuditLog[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Staff {
+  id          String              @id
+  name        String
+  email       String              @unique
+  phone       String              @default("")
+  title       String              @default("")
+  status      String              @default("active")
+  user        User?
+  assignments TeacherAssignment[]
+}
+
+model SchoolSettings {
+  id                 String           @id @default("school")
+  name               String
+  motto              String
+  town               String
+  region             String
+  country            String
+  address            String
+  phone              String
+  email              String
+  academicYearId     String?
+  currentTermId      String?
+  enrollmentPolicy   EnrollmentPolicy @default(full_or_waiver)
+  minimumDeposit     Int              @default(0)
+  admissionFee       Int              @default(0)
+  updatedAt          DateTime         @updatedAt
+}
+
+model AcademicYear {
+  id        String              @id
+  label     String              @unique
+  startsOn  DateTime            @db.Date
+  endsOn    DateTime            @db.Date
+  terms     Term[]
+  invoices  Invoice[]
+  configs   AssessmentConfig[]
+  assignments TeacherAssignment[]
+  enrollments ClassEnrollment[]
+}
+
+model Term {
+  id        String   @id
+  yearId    String
+  year      AcademicYear @relation(fields: [yearId], references: [id])
+  label     String
+  startsOn  DateTime @db.Date
+  endsOn    DateTime @db.Date
+  position  Int
+
+  @@unique([yearId, label])
+}
+
+model ClassRoom {
+  id           String              @id
+  name         String              @unique
+  level        String
+  teacherId    String?
+  feeLinks     FeeItemClass[]
+  enrollments  ClassEnrollment[]
+  applications AdmissionApplication[]
+  assignments  TeacherAssignment[]
+  configs      AssessmentConfig[]
+}
+
+model Subject {
+  id          String              @id
+  name        String
+  code        String              @unique
+  levels      String[]
+  assignments TeacherAssignment[]
+  configs     AssessmentConfig[]
+}
+
+model GradingBand {
+  id    String @id @default(cuid())
+  min   Int
+  grade String
+  label String
+  sort  Int
+}
+
+model TeacherAssignment {
+  id        String       @id @default(cuid())
+  staffId   String
+  staff     Staff        @relation(fields: [staffId], references: [id])
+  yearId    String
+  year      AcademicYear @relation(fields: [yearId], references: [id])
+  classId   String
+  classRoom ClassRoom    @relation(fields: [classId], references: [id])
+  subjectId String
+  subject   Subject      @relation(fields: [subjectId], references: [id])
+
+  @@unique([staffId, yearId, classId, subjectId])
+}
+
+model Student {
+  id                 String             @id
+  admissionNumber    String             @unique
+  firstName          String
+  lastName           String
+  otherNames         String             @default("")
+  sex                String
+  dateOfBirth        DateTime           @db.Date
+  status             StudentStatus      @default(active)
+  enrolledOn         DateTime?          @db.Date
+  residentialAddress String             @default("")
+  applicationId      String?            @unique
+  application        AdmissionApplication? @relation(fields: [applicationId], references: [id])
+  guardians          StudentGuardian[]
+  enrollments        ClassEnrollment[]
+  invoices           Invoice[]
+  payments           Payment[]
+  adjustments        Adjustment[]
+  markRows           MarkRow[]
+  reports            ReportCardSnapshot[]
+}
+
+model Guardian {
+  id          String            @id
+  fullName    String
+  phone       String
+  email       String            @default("")
+  occupation  String            @default("")
+  students    StudentGuardian[]
+}
+
+model StudentGuardian {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      Student  @relation(fields: [studentId], references: [id])
+  guardianId   String
+  guardian     Guardian @relation(fields: [guardianId], references: [id])
+  relationship String
+  primary      Boolean  @default(false)
+
+  @@unique([studentId, guardianId])
+}
+
+model ClassEnrollment {
+  id        String       @id @default(cuid())
+  studentId String
+  student   Student      @relation(fields: [studentId], references: [id])
+  classId   String
+  classRoom ClassRoom    @relation(fields: [classId], references: [id])
+  yearId    String
+  year      AcademicYear @relation(fields: [yearId], references: [id])
+  active    Boolean      @default(true)
+
+  @@unique([studentId, yearId])
+}
+
+model AdmissionApplication {
+  id              String            @id @default(cuid())
+  number          String            @unique
+  status          ApplicationStatus @default(draft)
+  firstName       String
+  lastName        String
+  otherNames      String            @default("")
+  sex             String
+  dateOfBirth     DateTime          @db.Date
+  intendedClassId String
+  intendedClass   ClassRoom         @relation(fields: [intendedClassId], references: [id])
+  yearId          String
+  termLabel       String
+  address         String            @default("")
+  notes           String            @default("")
+  submittedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  guardians       ApplicationGuardian[]
+  decisions       AdmissionDecision[]
+  invoices        Invoice[]
+  payments        Payment[]
+  student         Student?
+}
+
+model ApplicationGuardian {
+  id            String               @id @default(cuid())
+  applicationId String
+  application   AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fullName      String
+  relationship  String
+  phone         String
+  email         String               @default("")
+  occupation    String               @default("")
+  primary       Boolean              @default(false)
+}
+
+model AdmissionDecision {
+  id            String               @id @default(cuid())
+  applicationId String
+  application   AdmissionApplication @relation(fields: [applicationId], references: [id])
+  outcome       ApplicationStatus
+  reason        String
+  decidedById   String
+  createdAt     DateTime             @default(now())
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  ownerType    String
+  ownerId      String
+  filename     String
+  storedName   String
+  mime         String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+}
+
+model FeeItem {
+  id          String         @id @default(cuid())
+  name        String
+  amount      Int
+  kind        InvoiceKind    @default(school_fee)
+  active      Boolean        @default(true)
+  classes     FeeItemClass[]
+}
+
+model FeeItemClass {
+  feeItemId String
+  classId   String
+  feeItem   FeeItem   @relation(fields: [feeItemId], references: [id], onDelete: Cascade)
+  classRoom ClassRoom @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([feeItemId, classId])
+}
+
+model Invoice {
+  id            String               @id @default(cuid())
+  number        String               @unique
+  kind          InvoiceKind
+  status        InvoiceStatus        @default(issued)
+  studentId     String?
+  student       Student?             @relation(fields: [studentId], references: [id])
+  applicationId String?
+  application   AdmissionApplication? @relation(fields: [applicationId], references: [id])
+  yearId        String?
+  year          AcademicYear?        @relation(fields: [yearId], references: [id])
+  termLabel     String
+  issuedOn      DateTime             @db.Date
+  notes         String               @default("")
+  items         InvoiceItem[]
+  allocations   PaymentAllocation[]
+  adjustments   Adjustment[]
+  createdAt     DateTime             @default(now())
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  label       String
+  amount      Int
+  feeItemId   String?
+}
+
+model Payment {
+  id            String            @id
+  receiptNumber String            @unique
+  studentId     String?
+  student       Student?          @relation(fields: [studentId], references: [id])
+  applicationId String?
+  application   AdmissionApplication? @relation(fields: [applicationId], references: [id])
+  paidOn        DateTime          @db.Date
+  method        PaymentMethod
+  reference     String            @default("")
+  amount        Int
+  recordedById  String
+  note          String            @default("")
+  reversedAt    DateTime?
+  allocations   PaymentAllocation[]
+  createdAt     DateTime          @default(now())
+}
+
+model PaymentAllocation {
+  id        String  @id @default(cuid())
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id])
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  amount    Int
+}
+
+model Adjustment {
+  id          String   @id
+  studentId   String?
+  student     Student? @relation(fields: [studentId], references: [id])
+  invoiceId   String?
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
+  yearLabel   String
+  termLabel   String
+  label       String
+  amount      Int
+  reason      String   @default("")
+  createdById String
+  createdAt   DateTime @default(now())
+  reversedAt  DateTime?
+}
+
+model Reversal {
+  id          String   @id @default(cuid())
+  targetType  String
+  targetId    String
+  reason      String
+  createdById String
+  createdAt   DateTime @default(now())
+}
+
+model AssessmentConfig {
+  id         String       @id
+  yearId     String
+  year       AcademicYear @relation(fields: [yearId], references: [id])
+  termLabel  String
+  classId    String
+  classRoom  ClassRoom    @relation(fields: [classId], references: [id])
+  subjectId  String
+  subject    Subject      @relation(fields: [subjectId], references: [id])
+  components Json
+  status     String
+  sheets     MarkSheet[]
+
+  @@unique([yearId, termLabel, classId, subjectId])
+}
+
+model MarkSheet {
+  id           String           @id
+  configId     String
+  config       AssessmentConfig @relation(fields: [configId], references: [id])
+  status       SheetStatus      @default(draft)
+  returnReason String?
+  rows         MarkRow[]
+  events       ResultEvent[]
+}
+
+model MarkRow {
+  id        String    @id @default(cuid())
+  sheetId   String
+  sheet     MarkSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student   @relation(fields: [studentId], references: [id])
+  scores    Json
+  remark    String?
+
+  @@unique([sheetId, studentId])
+}
+
+model ResultEvent {
+  id        String    @id @default(cuid())
+  sheetId   String
+  sheet     MarkSheet @relation(fields: [sheetId], references: [id])
+  action    String
+  comment   String    @default("")
+  actorId   String
+  createdAt DateTime  @default(now())
+}
+
+model ReportCardSnapshot {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  yearLabel   String
+  termLabel   String
+  version     Int
+  payload     Json
+  publishedBy String
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, yearLabel, termLabel, version])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  summary    String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+}
+
+model Counter {
+  id    String @id
+  value Int    @default(0)
+}

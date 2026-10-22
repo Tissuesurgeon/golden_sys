@@ -3,6 +3,7 @@
 import { DocumentHeader } from "@/components/print/document-header";
 import { PageHeader, Surface } from "@/components/common/ui-bits";
 import { Button } from "@/components/ui/button";
+import { adjustmentFormAction } from "@/lib/server/forms";
 import { formatDate, formatMoney } from "@/lib/format";
 import { canViewFinance } from "@/lib/prototype/permissions";
 import { buildStatement, className, currentStaff, studentName } from "@/lib/prototype/selectors";
@@ -17,21 +18,22 @@ export function StatementView({ studentId }: { studentId: string }) {
   }
   if (!student) return <Surface className="p-8 text-sm">Student not found.</Surface>;
   const statement = buildStatement(state, student.id, state.year, state.term);
-  // #region agent log
-  // eslint-disable-next-line react-hooks/purity -- debug instrumentation
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",runId:"post-fix",hypothesisId:"C",location:"statement-view.tsx:columns",message:"adjustment column",data:{studentId,adjustmentRows:statement.rows.filter((row)=>row.adjustment!==0).length,paymentColumnShowsAdjustment:false},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   return (
     <div>
       <div className="no-print">
         <PageHeader
           title="Fee statement"
-          description="Preview ledger. Export is not connected in this phase."
+          description="Charges, payments, adjustments, and the closing balance for this term."
           actions={
-            <Button type="button" onClick={() => window.print()}>
-              Print statement
-            </Button>
+            <div className="flex gap-2">
+              <Button type="button" onClick={() => window.print()}>
+                Print statement
+              </Button>
+              <a className="inline-flex h-11 items-center rounded-lg border border-border px-4 text-sm font-medium" href={`/api/pdf/statement/${student.id}`}>
+                PDF
+              </a>
+            </div>
           }
         />
       </div>
@@ -97,8 +99,17 @@ export function StatementView({ studentId }: { studentId: string }) {
         </table>
         </div>
         <p className="mt-4 text-sm font-semibold">Closing balance {formatMoney(statement.closing)}</p>
-        <p className="mt-6 text-center text-xs text-muted-foreground">Sample statement — not a school record.</p>
+        <p className="mt-6 text-center text-xs text-muted-foreground">Recorded school statement. Payments are not gateway-verified.</p>
       </Surface>
+      <form action={adjustmentFormAction} className="no-print mt-4 grid gap-2 rounded-xl border border-border bg-white p-4 sm:grid-cols-2">
+        <input type="hidden" name="studentId" value={student.id} />
+        <input type="hidden" name="year" value={state.year} />
+        <input type="hidden" name="term" value={state.term} />
+        <input name="label" placeholder="Adjustment label" className="h-11 rounded-lg border border-input px-3 text-sm" />
+        <input name="amount" placeholder="Amount in GHS, negative to waive" className="h-11 rounded-lg border border-input px-3 text-sm" />
+        <input name="reason" required placeholder="Reason" className="h-11 rounded-lg border border-input px-3 text-sm sm:col-span-2" />
+        <button className="h-11 rounded-lg border border-border text-sm font-medium sm:col-span-2">Record adjustment</button>
+      </form>
     </div>
   );
 }

@@ -161,7 +161,12 @@ export function StudentDirectory() {
         description="Admission list for Golden Child School. Teachers see only their assigned classes."
         actions={
           canAdd ? (
-            <Button onClick={() => setOpen(true)}>Add student</Button>
+            <div className="flex gap-2">
+              <Link className="inline-flex h-11 items-center rounded-lg border border-border px-4 text-sm font-medium" href="/students/import">
+                Import CSV
+              </Link>
+              <Button onClick={() => setOpen(true)}>Add student</Button>
+            </div>
           ) : null
         }
       />
@@ -214,7 +219,7 @@ export function StudentDirectory() {
         ) : pageRows.length === 0 ? (
           <EmptyState
             title="No students match"
-            body="Try another name, admission number, class, or status. New admissions appear here after they are saved in this preview."
+            body="Try another name, admission number, class, or status."
           />
         ) : (
           <div className="overflow-x-auto">
@@ -261,20 +266,20 @@ export function StudentDirectory() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add student</DialogTitle>
-            <DialogDescription>The admission is stored in this browser preview only.</DialogDescription>
+            <DialogDescription>The student is added to the current class and billed from the fee list for that class.</DialogDescription>
           </DialogHeader>
           <StudentForm
             classes={state.classes}
             requireGuardian
             submitLabel="Save student"
             onCancel={() => setOpen(false)}
-            onSubmit={(values) => {
+            onSubmit={async (values) => {
               const duplicate = state.students.some(
                 (student) => student.admissionNumber.toLowerCase() === values.admissionNumber.toLowerCase(),
               );
               if (duplicate) return "That admission number is already in use.";
               const id = `stu-${Date.now()}`;
-              dispatch({
+              const error = await dispatch({
                 type: "add-student",
                 student: toStudent(id, values),
                 guardian: {
@@ -288,6 +293,7 @@ export function StudentDirectory() {
                   primary: true,
                 },
               });
+              if (error) return error;
               setOpen(false);
             }}
           />

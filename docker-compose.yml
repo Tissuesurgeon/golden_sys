@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: golden
+      POSTGRES_PASSWORD: golden_dev_password
+      POSTGRES_DB: golden_sys
+    ports:
+      - "5437:5432"
+    volumes:
+      - golden_pg:/var/lib/postgresql/data
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://golden:golden_dev_password@postgres:5432/golden_sys?schema=public
+      AUTH_SECRET: replace-me
+      ADMIN_NAME: School Administrator
+      ADMIN_EMAIL: admin@goldenchild.example
+      ADMIN_PASSWORD: replace-me
+      SEED_DEMO: "0"
+      STORAGE_DIR: /data/private
+    volumes:
+      - golden_files:/data/private
+    depends_on:
+      - postgres
+
+volumes:
+  golden_pg:
+  golden_files:

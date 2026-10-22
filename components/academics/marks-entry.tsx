@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LinkButton, PageHeader, SampleNotice, StatusBadge, Surface, selectClassName, sheetStatusLabel, sheetStatusTone } from "@/components/common/ui-bits";
+import { LinkButton, PageHeader, StatusBadge, Surface, selectClassName, sheetStatusLabel, sheetStatusTone } from "@/components/common/ui-bits";
 import { Button } from "@/components/ui/button";
 import { studentName, className, subjectName, configForSheet, currentStaff, summariseRow, teacherCanAccessClass } from "@/lib/prototype/selectors";
 import { usePrototype } from "@/lib/prototype/store";
@@ -66,7 +66,7 @@ export function MarksEntry() {
     document.querySelector<HTMLInputElement>(`[data-mark="${rowIndex}-${colIndex}"]`)?.focus();
   }
 
-  function save(submit: boolean) {
+  async function save(submit: boolean) {
     if (!sheet || !config) return;
     setError("");
     for (const entry of rows) {
@@ -82,10 +82,20 @@ export function MarksEntry() {
       ...entry.row,
       scores: entry.scores,
     }));
-    dispatch({ type: "save-marks", sheetId: sheet.id, rows: nextRows });
-    if (submit) dispatch({ type: "submit-marks", sheetId: sheet.id });
+    const saved = await dispatch({ type: "save-marks", sheetId: sheet.id, rows: nextRows });
+    if (saved) {
+      setError(saved);
+      return;
+    }
+    if (submit) {
+      const submitted = await dispatch({ type: "submit-marks", sheetId: sheet.id });
+      if (submitted) {
+        setError(submitted);
+        return;
+      }
+    }
     setDraft({});
-    setMessage(submit ? "Submitted for review in this preview." : "Draft saved in this preview.");
+    setMessage(submit ? "Submitted for review." : "Draft saved.");
   }
 
   return (
@@ -155,7 +165,6 @@ export function MarksEntry() {
                             data-mark={`${rowIndex}-${colIndex}`}
                             disabled={locked}
                             value={raw}
-                            className="w-16 rounded-lg border border-input px-2 py-1"
                             aria-label={`${entry.student ? studentName(entry.student) : "Student"} ${component.name}`}
                             aria-invalid={Boolean(problem)}
                             onChange={(event) =>
@@ -206,7 +215,6 @@ export function MarksEntry() {
           </div>
           {locked ? <p className="mt-3 text-xs text-muted-foreground">This sheet is {sheetStatusLabel(sheet.status).toLowerCase()} and cannot be edited here.</p> : null}
           <div className="mt-4">
-            <SampleNotice>Marks saved here stay in the browser preview until a real academic record is connected.</SampleNotice>
           </div>
         </Surface>
       ) : (

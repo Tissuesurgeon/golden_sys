@@ -1,5 +1,7 @@
 import { MarksEntry } from "@/components/academics/marks-entry";
+import { requireAcademics } from "@/lib/server/guard";
 
-export default function MarksPage() {
+export default async function MarksPage() {
+  await requireAcademics();
   return <MarksEntry />;
 }

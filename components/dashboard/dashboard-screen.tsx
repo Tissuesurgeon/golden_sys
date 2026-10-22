@@ -36,10 +36,6 @@ export function DashboardScreen() {
   const mine = staff?.role === "teacher" ? enrolled.filter((student) => staff.classIds.includes(student.classId)) : enrolled;
 
   const chartWindow = periodBounds(state.year, state.term);
-  // #region agent log
-  // eslint-disable-next-line react-hooks/purity -- debug instrumentation
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",hypothesisId:"E",location:"dashboard-screen.tsx:chart",message:"collections chart window",data:{year:state.year,term:state.term,start:chartWindow.start,end:chartWindow.end,openEnded:chartWindow.start==="2000-01-01"},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const chart = Object.entries(
     state.payments
       .filter((payment) => {

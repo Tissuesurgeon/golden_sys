@@ -1,5 +1,10 @@
+import { redirect } from "next/navigation";
 import { SettingsScreen } from "@/components/admin/settings-screen";
+import { requireUser } from "@/lib/auth";
+import { can } from "@/lib/permissions";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const user = await requireUser();
+  if (!can(user.role, "settings.manage")) redirect("/dashboard");
   return <SettingsScreen />;
 }

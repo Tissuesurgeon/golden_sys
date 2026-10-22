@@ -50,9 +50,6 @@ export function periodBounds(year: string, term: string) {
   else if (term === "Term 2") bounds = { start: `${endYear}-01-08`, end: `${endYear}-04-10` };
   else if (term === "Term 3") bounds = { start: `${endYear}-04-20`, end: `${endYear}-07-31` };
   else bounds = { start: `${startYear}-09-01`, end: `${startYear}-12-18` };
-  // #region agent log
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",hypothesisId:"A",location:"selectors.ts:periodBounds",message:"period bounds",data:{year,term,start:bounds.start,end:bounds.end},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return bounds;
 }
 
@@ -133,9 +130,6 @@ export function buildStatement(state: PrototypeState, studentId: string, year: s
     start,
     end,
   };
-  // #region agent log
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",hypothesisId:"C",location:"selectors.ts:buildStatement",message:"statement totals",data:{studentId,year,term,opening:result.opening,closing:result.closing,adjustments:result.adjustments,waiverInPaymentColumn:result.rows.some((row)=>row.adjustment!==0&&row.payment===0)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return result;
 }
 
@@ -149,9 +143,6 @@ export function studentOutstanding(state: PrototypeState, studentId: string, yea
     .filter((item) => item.studentId === studentId && (!year || item.year === year) && (!term || item.term === term))
     .reduce((sum, item) => sum + item.amount, 0);
   const outstanding = year && term ? buildStatement(state, studentId, year, term).closing : chargeTotal + adjustments - paid;
-  // #region agent log
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",hypothesisId:"B",location:"selectors.ts:studentOutstanding",message:"term outstanding ignores opening",data:{studentId,year:year??null,term:term??null,outstanding},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return outstanding;
 }
 

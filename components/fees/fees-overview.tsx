@@ -63,20 +63,11 @@ export function FeesOverview() {
     <div>
       <PageHeader
         title="Fees"
-        description={`${state.term}, ${state.year}. Figures update inside this preview when a sample payment is recorded.`}
+        description={`${state.term}, ${state.year}. Balances come from invoices, payments, and adjustments.`}
         actions={
           canRecordPayments(staff.role) ? <LinkButton href="/fees/record">Record payment</LinkButton> : null
         }
       />
-      <div className="mb-4 flex flex-wrap gap-2 text-sm">
-        <Link className="font-medium text-blue" href="/fees/record">
-          Record payment
-        </Link>
-        <span className="text-border">/</span>
-        <span className="text-ink">Charges and invoices are listed below</span>
-        <span className="text-border">/</span>
-        <span className="text-ink">Payment history</span>
-      </div>
       <div className="mb-4 grid gap-3 md:grid-cols-4">
         <select className={selectClassName()} aria-label="Academic year" value={state.year} onChange={(event) => dispatch({ type: "set-period", year: event.target.value, term: state.term })}>
           {state.school.years.map((year) => (

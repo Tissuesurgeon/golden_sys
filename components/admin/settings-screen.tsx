@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { canManageSettings, roleLabel } from "@/lib/prototype/permissions";
 import { currentStaff } from "@/lib/prototype/selectors";
 import { usePrototype } from "@/lib/prototype/store";
+import type { SchoolSettings } from "@/lib/prototype/types";
 
 export function SettingsScreen() {
   const { state, dispatch } = usePrototype();
@@ -22,7 +23,7 @@ export function SettingsScreen() {
 
   return (
     <div>
-      <PageHeader title="School settings" description="Sample contact details for the preview. The crest is the supplied Golden Child School badge." />
+      <PageHeader title="School settings" description="School identity, academic year, and the enrollment gate. The crest is the supplied Golden Child School badge." />
       <Tabs defaultValue="general">
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="general">General</TabsTrigger>
@@ -53,13 +54,13 @@ export function SettingsScreen() {
               Email
               <Input value={school.email} onChange={(event) => setSchool({ ...school, email: event.target.value })} />
             </label>
-            <p className="text-xs text-muted-foreground sm:col-span-2">Address, phone, and email are sample contact details for this preview.</p>
+            <p className="text-xs text-muted-foreground sm:col-span-2">These details appear on receipts, statements, and report cards.</p>
             <div>
               <Button
                 type="button"
                 onClick={() => {
                   dispatch({ type: "update-school", school });
-                  setSaved("General settings saved in this preview.");
+                  setSaved("General settings saved.");
                 }}
               >
                 Save general settings
@@ -99,6 +100,26 @@ export function SettingsScreen() {
               Current term
               <Input value={school.currentTerm} onChange={(event) => setSchool({ ...school, currentTerm: event.target.value })} />
             </label>
+            <label className="block max-w-xs space-y-1.5 text-sm">
+              Enrollment gate
+              <select
+                className="h-11 w-full rounded-lg border border-input bg-white px-3 text-sm"
+                value={school.enrollmentPolicy ?? "full_or_waiver"}
+                onChange={(event) => setSchool({ ...school, enrollmentPolicy: event.target.value as SchoolSettings["enrollmentPolicy"] })}
+              >
+                <option value="full_or_waiver">Full payment or waiver</option>
+                <option value="minimum_deposit">Minimum deposit</option>
+                <option value="waiver_only">Authorized waiver</option>
+              </select>
+            </label>
+            <label className="block max-w-xs space-y-1.5 text-sm">
+              Minimum deposit (pesewas)
+              <Input value={String(school.minimumDeposit ?? 0)} onChange={(event) => setSchool({ ...school, minimumDeposit: Number(event.target.value) || 0 })} />
+            </label>
+            <label className="block max-w-xs space-y-1.5 text-sm">
+              Admission fee (pesewas)
+              <Input value={String(school.admissionFee ?? 0)} onChange={(event) => setSchool({ ...school, admissionFee: Number(event.target.value) || 0 })} />
+            </label>
             <div>
               <p className="text-sm font-medium">Grading scale</p>
               <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -131,19 +152,10 @@ export function SettingsScreen() {
         </TabsContent>
         <TabsContent value="security" className="mt-4">
           <Surface className="space-y-3 p-5">
-            <p className="text-sm text-ink">This preview keeps its session in the browser. It is not a signed-in school account.</p>
-            <p className="text-sm text-muted-foreground">Password reset, session expiry, and audit logs begin after the interface review.</p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                dispatch({ type: "reset" });
-                setSchool(state.school);
-                setSaved("Preview data reset.");
-              }}
-            >
-              Reset preview data
-            </Button>
+            <p className="text-sm text-ink">Sessions are stored in the database and expire after 14 days. Signing out ends the session.</p>
+            <p className="text-sm text-muted-foreground">
+              An administrator issues password reset links from Users and Permissions. Email delivery starts when SMTP_URL is configured.
+            </p>
           </Surface>
         </TabsContent>
       </Tabs>

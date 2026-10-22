@@ -6,7 +6,6 @@ import { StudentForm, toStudent, type StudentFormValues } from "@/components/stu
 import {
   LinkButton,
   PageHeader,
-  SampleNotice,
   SectionTitle,
   StatusBadge,
   Surface,
@@ -49,7 +48,7 @@ export function StudentProfile({ studentId }: { studentId: string }) {
     return (
       <Surface className="p-8">
         <h1 className="text-xl font-semibold text-navy">Student not found</h1>
-        <p className="mt-2 text-sm text-muted-foreground">That admission is not in this preview.</p>
+        <p className="mt-2 text-sm text-muted-foreground">That admission was not found.</p>
         <LinkButton href="/students" className="mt-4">
           Back to students
         </LinkButton>
@@ -60,10 +59,6 @@ export function StudentProfile({ studentId }: { studentId: string }) {
   const guardians = state.guardians.filter((item) => item.studentId === student.id);
   const balance = studentOutstanding(state, student.id, state.year, state.term);
   const statement = buildStatement(state, student.id, state.year, state.term);
-  // #region agent log
-  // eslint-disable-next-line react-hooks/purity -- debug instrumentation
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",hypothesisId:"B",location:"student-profile.tsx:balance",message:"profile balance vs statement",data:{studentId:student.id,year:state.year,term:state.term,outstanding:balance,opening:statement.opening,closing:statement.closing,mismatch:balance!==statement.closing,adjustmentRows:statement.rows.filter((row)=>row.adjustment!==0).map((row)=>({label:row.label,payment:row.payment,adjustment:row.adjustment}))},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const charges = state.charges.filter(
     (item) => item.studentId === student.id && item.year === state.year && item.term === state.term,
   );
@@ -366,12 +361,11 @@ export function StudentProfile({ studentId }: { studentId: string }) {
                 dispatch({ type: "update-student", student: toStudent(student.id, values) });
               }}
             />
-            <p className="mt-3 text-xs text-muted-foreground">Changes stay in this browser preview.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Saving updates the school record.</p>
           </Surface>
         </TabsContent>
       </Tabs>
       <div className="mt-4">
-        <SampleNotice>Student changes and fee figures in this preview are demonstration data.</SampleNotice>
       </div>
     </div>
   );

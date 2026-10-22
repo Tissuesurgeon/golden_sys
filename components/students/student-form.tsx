@@ -38,7 +38,7 @@ export function StudentForm({
   initial?: Partial<StudentFormValues>;
   requireGuardian?: boolean;
   submitLabel: string;
-  onSubmit: (values: StudentFormValues) => string | void;
+  onSubmit: (values: StudentFormValues) => string | void | Promise<string | void>;
   onCancel?: () => void;
 }) {
   const form = useForm<StudentFormValues>({
@@ -66,7 +66,7 @@ export function StudentForm({
   return (
     <form
       className="grid gap-4 sm:grid-cols-2"
-      onSubmit={form.handleSubmit((values) => {
+      onSubmit={form.handleSubmit(async (values) => {
         if (requireGuardian && values.guardianName.trim().length < 2) {
           form.setError("guardianName", { message: "Enter the guardian's name." });
           return;
@@ -75,7 +75,7 @@ export function StudentForm({
           form.setError("guardianPhone", { message: "Enter a phone number." });
           return;
         }
-        const message = onSubmit(values);
+        const message = await onSubmit(values);
         if (typeof message === "string") form.setError("admissionNumber", { message });
       })}
       noValidate

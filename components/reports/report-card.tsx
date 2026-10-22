@@ -32,22 +32,18 @@ export function ReportCardView({ studentId }: { studentId: string }) {
     return <Surface className="p-8 text-sm">This class is outside your assignment.</Surface>;
   }
 
-  // #region agent log
-  // eslint-disable-next-line react-hooks/purity -- debug instrumentation
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",hypothesisId:"D",location:"report-card.tsx:sections",message:"report card section statuses",data:{studentId,print:params.get("print"),statuses:sections.map((item)=>({subject:item.config?.subjectId,status:item.sheet.status}))},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  // eslint-disable-next-line react-hooks/purity -- debug instrumentation
-  fetch("http://127.0.0.1:7393/ingest/ba92319d-2d30-4e16-a20b-be71b8376aad",{method:"POST",headers:{"Content-Type":"application/json","X-Debug-Session-Id":"87cf4d"},body:JSON.stringify({sessionId:"87cf4d",runId:"post-fix",hypothesisId:"D",location:"report-card.tsx:print-gate",message:"print gate",data:{printEnabled:printable.length>0,printable:printable.length,awaiting:awaiting.length},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   return (
     <div>
       <div className="no-print mb-4 flex flex-wrap items-center gap-3">
         {printable.length > 0 ? (
-          <Button type="button" onClick={() => window.print()}>
-            Print report card
-          </Button>
+          <>
+            <Button type="button" onClick={() => window.print()}>
+              Print report card
+            </Button>
+            <a className="text-sm font-medium text-blue" href={`/api/pdf/report/${student.id}`}>
+              Download PDF
+            </a>
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">Print stays off until a subject is approved.</p>
         )}

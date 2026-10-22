@@ -13,6 +13,8 @@ export function ReportDirectory() {
   const staff = currentStaff(state);
   const [classId, setClassId] = useState("all");
   const [publication, setPublication] = useState("all");
+  const [error, setError] = useState("");
+  const [note, setNote] = useState("");
 
   const rows = useMemo(() => {
     return state.students
@@ -65,6 +67,8 @@ export function ReportDirectory() {
           <option value="published">Published</option>
         </select>
       </div>
+      {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
+      {note ? <p className="mb-3 text-sm text-success">{note}</p> : null}
       <Surface>
         <div className="overflow-x-auto">
           <Table>
@@ -104,13 +108,25 @@ export function ReportDirectory() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          state.sheets
-                            .filter((sheet) => {
-                              const config = configForSheet(state, sheet);
-                              return config?.classId === student.classId && config.year === state.year && config.term === state.term && sheet.status === "approved";
-                            })
-                            .forEach((sheet) => dispatch({ type: "publish-sheet", sheetId: sheet.id }));
+                        onClick={async () => {
+                          setError("");
+                          setNote("");
+                          const sheets = state.sheets.filter((sheet) => {
+                            const config = configForSheet(state, sheet);
+                            return config?.classId === student.classId && config.year === state.year && config.term === state.term && sheet.status === "approved";
+                          });
+                          if (sheets.length === 0) {
+                            setError("Approve the mark sheet before publishing it.");
+                            return;
+                          }
+                          for (const sheet of sheets) {
+                            const message = await dispatch({ type: "publish-sheet", sheetId: sheet.id });
+                            if (message) {
+                              setError(message);
+                              return;
+                            }
+                          }
+                          setNote("Report card published.");
                         }}
                       >
                         Publish

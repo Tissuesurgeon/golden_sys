@@ -1,8 +1,9 @@
 "use client";
 
 import { DocumentHeader } from "@/components/print/document-header";
-import { LinkButton, SampleNotice, Surface } from "@/components/common/ui-bits";
+import { LinkButton, Surface } from "@/components/common/ui-bits";
 import { Button } from "@/components/ui/button";
+import { reversePaymentAction } from "@/lib/server/forms";
 import { formatDate, formatMoney } from "@/lib/format";
 import { canViewFinance } from "@/lib/prototype/permissions";
 import { chargeBalance, className, currentStaff, studentName } from "@/lib/prototype/selectors";
@@ -16,7 +17,7 @@ export function ReceiptView({ paymentId }: { paymentId: string }) {
     return <Surface className="p-8 text-sm">Receipts are visible to the accounts office.</Surface>;
   }
   if (!payment) {
-    return <Surface className="p-8 text-sm">That receipt is not in this preview.</Surface>;
+    return <Surface className="p-8 text-sm">That receipt was not found.</Surface>;
   }
   const student = state.students.find((item) => item.id === payment.studentId);
   const remaining = payment.allocations.reduce((sum, allocation) => sum + chargeBalance(state, allocation.chargeId), 0);
@@ -32,12 +33,13 @@ export function ReceiptView({ paymentId }: { paymentId: string }) {
             View statement
           </LinkButton>
         ) : null}
+        <a className="inline-flex h-11 items-center rounded-lg border border-border px-4 text-sm font-medium" href={`/api/pdf/receipt/${payment.id}`}>
+          PDF
+        </a>
       </div>
       <Surface className="print-sheet mx-auto w-full max-w-[210mm] p-4 sm:p-8">
         <DocumentHeader school={state.school} kicker="Official receipt" />
-        <div className="mt-4">
-          <SampleNotice>Sample receipt — not a school record.</SampleNotice>
-        </div>
+        <p className="mt-4 text-sm text-muted-foreground">Recorded by the school. Not verified by a payment gateway.</p>
         <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
           <Item label="Receipt number" value={payment.receiptNumber} />
           <Item label="Date" value={formatDate(payment.date)} />
@@ -73,6 +75,11 @@ export function ReceiptView({ paymentId }: { paymentId: string }) {
         </p>
         <p className="mt-8 text-center text-xs text-muted-foreground">{state.school.motto}</p>
       </Surface>
+      <form action={reversePaymentAction} className="no-print mt-4 flex flex-wrap gap-2">
+        <input type="hidden" name="paymentId" value={payment.id} />
+        <input name="reason" required placeholder="Reason for reversal" className="h-11 min-w-0 flex-1 rounded-lg border border-input px-3 text-sm" />
+        <button className="h-11 rounded-lg border border-danger px-4 text-sm text-danger">Reverse payment</button>
+      </form>
     </div>
   );
 }

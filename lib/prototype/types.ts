@@ -1,6 +1,6 @@
 export type Role = "administrator" | "bursar" | "teacher";
 
-export type StudentStatus = "enrolled" | "withdrawn" | "graduated";
+export type StudentStatus = "enrolled" | "withdrawn" | "graduated" | "pending" | "transferred";
 
 export type PaymentMethod = "Cash" | "Mobile Money" | "Bank Transfer" | "Other";
 
@@ -90,7 +90,7 @@ export type Payment = {
   amount: number;
   allocations: Allocation[];
   recordedBy: string;
-  sample: true;
+  sample: boolean;
 };
 
 export type GradeBand = {
@@ -113,6 +113,9 @@ export type SchoolSettings = {
   years: string[];
   terms: string[];
   grading: GradeBand[];
+  enrollmentPolicy?: "full_or_waiver" | "minimum_deposit" | "waiver_only";
+  minimumDeposit?: number;
+  admissionFee?: number;
 };
 
 export type AssessmentComponent = {

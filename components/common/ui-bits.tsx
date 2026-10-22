@@ -82,7 +82,8 @@ export function StatusBadge({
 
 export function studentStatusTone(status: string): keyof typeof tones {
   if (status === "enrolled") return "success";
-  if (status === "withdrawn") return "warning";
+  if (status === "pending") return "info";
+  if (status === "withdrawn" || status === "transferred") return "warning";
   if (status === "graduated") return "navy";
   return "neutral";
 }
