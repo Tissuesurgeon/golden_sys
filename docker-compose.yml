@@ -9,6 +9,11 @@ services:
       - "5437:5432"
     volumes:
       - golden_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U golden -d golden_sys"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
   app:
     build: .
     ports:
@@ -20,11 +25,12 @@ services:
       ADMIN_EMAIL: admin@goldenchild.example
       ADMIN_PASSWORD: replace-me
       SEED_DEMO: "0"
-      STORAGE_DIR: /data/private
+      STORAGE_DIR: storage/private
     volumes:
-      - golden_files:/data/private
+      - golden_files:/app/storage/private
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
 volumes:
   golden_pg:
