@@ -16,7 +16,11 @@ run() {
 
 if [ "$(id -u)" = "0" ]; then
   chown -R node:node /app/storage/private
-  exec su-exec node "$0" serve
+  # Vercel routes to port 80. Only root can bind that port there.
+  port="${PORT:-3000}"
+  if [ "$port" -ge 1024 ]; then
+    exec su-exec node "$0" serve
+  fi
 fi
 
 run
