@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Golden Child School
 
-## Getting Started
+Records, fees, and report cards for Golden Child School in Koforidua. Administrators and the bursar run admissions, invoices, and the finance report. Teachers see only their classes, marks, attendance, and report cards.
 
-First, run the development server:
+Money is stored as integer pesewas. The crest used in the interface is `public/images/golden-child-school-logo.jpg`.
+
+## Local run
 
 ```bash
+npm install
+npx prisma migrate deploy
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. Set `DATABASE_URL` and `AUTH_SECRET` in `.env`. `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` create the first administrator when `SEED_DEMO=0`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`SEED_DEMO=1` is for development only. It wipes domain tables and loads sample students, staff, and fees. Demo passwords are `knowledge`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test
+npm run test:e2e
+```
 
-## Learn More
+## Deploy
 
-To learn more about Next.js, take a look at the following resources:
+`Dockerfile.vercel` is the container Vercel builds. It listens on port 80, runs `prisma migrate deploy` on startup, and keeps uploads under `STORAGE_DIR`. The local `Dockerfile` listens on port 3000. Set `DATABASE_URL`, `AUTH_SECRET`, and the administrator variables in the host environment. Uploaded files on Vercel do not survive a new container unless `STORAGE_DIR` is a persistent volume.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `docs/operations.md` for nightly `pg_dump` and `STORAGE_DIR` backups.

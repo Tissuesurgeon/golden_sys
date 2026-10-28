@@ -82,9 +82,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ kin
 
   if (kind === "report") {
     if (!can(user.role, "academics.read")) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    if (!(await teacherOwnsStudent(user, id))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     const snapshot = await prisma.reportCardSnapshot.findFirst({ where: { studentId: id }, orderBy: { version: "desc" }, include: { student: true } });
     if (!snapshot) return NextResponse.json({ error: "No published report card yet." }, { status: 404 });
-    if (!(await teacherOwnsStudent(user, snapshot.studentId))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     const payload = snapshot.payload as {
       name?: string;
       className?: string;

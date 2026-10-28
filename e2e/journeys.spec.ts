@@ -1,11 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function signIn(page: Page, email: string) {
+async function signIn(page: Page, email: string, destination: RegExp = /\/dashboard/) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.locator("input[autocomplete=current-password]").fill("knowledge");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/dashboard/);
+  await expect(page).toHaveURL(destination);
 }
 
 async function signOut(page: Page) {
@@ -63,7 +63,7 @@ test("eleven school office journeys", async ({ page }) => {
   await expect(page.getByRole("row", { name: /Efua Asante/ })).toContainText("English Language");
 
   await signOut(page);
-  await signIn(page, "efua.asante@goldenchild.example");
+  await signIn(page, "efua.asante@goldenchild.example", /\/my/);
   await page.goto("/fees");
   await expect(page).toHaveURL(/dashboard/);
   await page.goto("/academics/marks");
@@ -113,4 +113,31 @@ test("eleven school office journeys", async ({ page }) => {
   await expect(page.getByText("student.enrolled").first()).toBeVisible();
   await expect(page.getByText("payment.recorded").first()).toBeVisible();
   await expect(page.getByText("results.published").first()).toBeVisible();
+});
+
+test("bursar generates term invoices", async ({ page }) => {
+  await signIn(page, "kwame.boateng@goldenchild.example");
+  await page.goto("/fees/invoices/generate");
+  await expect(page.getByRole("heading", { name: "Generate term invoices" })).toBeVisible();
+  await page.getByLabel("Class").selectOption({ label: "Basic 4" });
+  await page.getByRole("button", { name: "Preview" }).click();
+  const confirm = page.getByRole("button", { name: "Confirm invoices" });
+  if (await confirm.isEnabled()) {
+    await confirm.click();
+    await expect(page).toHaveURL(/\/fees\/invoices/);
+    await expect(page.getByText(/created|skipped|Invoice/i).first()).toBeVisible();
+  } else {
+    await expect(page.getByText("0 students")).toBeVisible();
+  }
+});
+
+test("teacher marks attendance for their class", async ({ page }) => {
+  await signIn(page, "efua.asante@goldenchild.example", /\/my/);
+  await expect(page.getByRole("heading", { name: "My classes" })).toBeVisible();
+  await page.goto("/attendance");
+  await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible();
+  await page.getByRole("button", { name: "Save this day" }).click();
+  await expect(page.getByText("Attendance saved.")).toBeVisible();
+  await page.goto("/api/pdf/report/stu-nana");
+  await expect(page.getByText("Forbidden.")).toBeVisible();
 });

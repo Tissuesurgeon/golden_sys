@@ -17,11 +17,26 @@ npm run db:seed
 
 ## Migrations and backup
 
+Apply migrations with `npx prisma migrate deploy` on a server. Use `npx prisma migrate dev` only on a development database.
+
+Take a nightly database dump and a copy of the private file store. Keep both from the same night so a restore puts documents back with the rows that point at them.
+
 ```bash
-npx prisma migrate dev
-pg_dump "$DATABASE_URL" > backup.sql
-psql "$DATABASE_URL" < backup.sql
+mkdir -p /var/backups/golden-child
+stamp=$(date +%F)
+pg_dump "$DATABASE_URL" --format=custom --file="/var/backups/golden-child/db-$stamp.dump"
+rsync -a --delete "${STORAGE_DIR:-storage/private}/" "/var/backups/golden-child/files-$stamp/"
 ```
+
+Restore onto an empty database, then put the files back before starting the app:
+
+```bash
+pg_restore --clean --if-exists --no-owner --dbname="$DATABASE_URL" /var/backups/golden-child/db-YYYY-MM-DD.dump
+rsync -a /var/backups/golden-child/files-YYYY-MM-DD/ "${STORAGE_DIR:-storage/private}/"
+npx prisma migrate deploy
+```
+
+`--clean` drops objects already in the target database. Point it at the database you intend to replace.
 
 ## Email and files
 
