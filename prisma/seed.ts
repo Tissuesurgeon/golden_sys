@@ -305,12 +305,14 @@ async function main() {
     for (const catalogue of catalogues) {
       for (const level of levels) {
         const amount = level === "JHS" ? catalogue.jhs : level === "KG" ? catalogue.kg : catalogue.primary;
-        const fee = await tx.feeItem.create({ data: { name: catalogue.name, amount, kind: "school_fee", active: true } });
+        const fee = await tx.feeItem.create({
+          data: { name: catalogue.name, amount, kind: "school_fee", active: true, appliesTo: catalogue.name === "PTA levy" ? "new" : "all" },
+        });
         const rooms = state.classes.filter((room) => room.level === level);
         for (const room of rooms) await tx.feeItemClass.create({ data: { feeItemId: fee.id, classId: room.id } });
       }
     }
-    await tx.feeItem.create({ data: { name: "Admission fee", amount: 50000, kind: "admission", active: true } });
+    await tx.feeItem.create({ data: { name: "Admission fee", amount: 50000, kind: "admission", active: true, appliesTo: "new" } });
 
     for (const config of state.configs) {
       await tx.assessmentConfig.create({

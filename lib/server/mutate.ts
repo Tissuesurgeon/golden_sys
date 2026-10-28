@@ -231,24 +231,6 @@ export async function applyAction(user: CurrentUser, action: Action): Promise<{ 
             data: { studentId: action.student.id, guardianId, relationship: action.guardian.relationship || "Guardian", primary: true },
           });
         }
-        const fees = await tx.feeItem.findMany({
-          where: { active: true, kind: "school_fee", classes: { some: { classId: action.student.classId } } },
-        });
-        if (fees.length) {
-          const number = await nextDocumentNumber(tx, "invoice", new Date());
-          await tx.invoice.create({
-            data: {
-              number,
-              kind: "school_fee",
-              status: "issued",
-              studentId: action.student.id,
-              yearId: year,
-              termLabel: term,
-              issuedOn: dateOnly(isoDate(new Date())),
-              items: { create: fees.map((fee) => ({ label: fee.name, amount: fee.amount, feeItemId: fee.id })) },
-            },
-          });
-        }
         const sheets = await tx.markSheet.findMany({ where: { config: { classId: action.student.classId, yearId: year, termLabel: term } }, include: { config: true } });
         for (const sheet of sheets) {
           const components = sheet.config.components as { id: string }[];

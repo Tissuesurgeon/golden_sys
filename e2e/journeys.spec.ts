@@ -48,6 +48,15 @@ test("eleven school office journeys", async ({ page }) => {
   await signIn(page, "ama.mensah@goldenchild.example");
   await page.goto(applicationUrl);
   await page.getByRole("button", { name: "Enroll student" }).click();
+  await expect(page.getByRole("link", { name: "Open student record" })).toBeVisible();
+  await signOut(page);
+  await signIn(page, "kwame.boateng@goldenchild.example");
+  await page.goto(applicationUrl);
+  await page.getByRole("button", { name: "Generate first-term invoice" }).click();
+  await expect(page.getByRole("heading", { name: /INV-/ })).toBeVisible();
+  await signOut(page);
+  await signIn(page, "ama.mensah@goldenchild.example");
+  await page.goto(applicationUrl);
   await page.getByRole("link", { name: "Open student record" }).click();
   await expect(page.getByRole("heading", { name: new RegExp(lastName) })).toBeVisible();
 

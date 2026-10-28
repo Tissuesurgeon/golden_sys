@@ -8,10 +8,13 @@ describe("permission scoping", () => {
     expect(can("teacher", "academics.read")).toBe(true);
     expect(can("teacher", "academics.publish")).toBe(false);
     expect(can("teacher", "students.write")).toBe(false);
+    expect(can("teacher", "invoices.generate")).toBe(false);
   });
 
   it("lets the bursar handle fees and keeps academics with the office", () => {
     expect(can("bursar", "finance.read")).toBe(true);
+    expect(can("bursar", "invoices.generate")).toBe(true);
+    expect(can("administrator", "invoices.generate")).toBe(true);
     expect(can("bursar", "academics.read")).toBe(false);
     expect(can("bursar", "academics.approve")).toBe(false);
     expect(can("administrator", "settings.manage")).toBe(true);

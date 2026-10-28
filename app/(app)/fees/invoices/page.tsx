@@ -6,6 +6,7 @@ import type { InvoiceStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { displayInvoiceStatus, invoiceBalance } from "@/lib/finance";
 import { formatMoney } from "@/lib/format";
+import { can } from "@/lib/permissions";
 import { requireFinance } from "@/lib/server/guard";
 
 export default async function InvoicesPage({
@@ -13,7 +14,7 @@ export default async function InvoicesPage({
 }: {
   searchParams: Promise<{ termId?: string; classId?: string; status?: string; q?: string; created?: string; skipped?: string }>;
 }) {
-  await requireFinance();
+  const user = await requireFinance();
   const query = await searchParams;
   const [years, classes, invoices] = await Promise.all([
     prisma.academicYear.findMany({ include: { terms: { orderBy: { position: "asc" } } }, orderBy: { label: "desc" } }),
@@ -49,7 +50,12 @@ export default async function InvoicesPage({
       <PageHeader
         title="Invoices"
         description="Term bills, arrears carried forward, and what is still open."
-        actions={<LinkButton href="/fees/invoices/generate">Generate term invoices</LinkButton>}
+        actions={can(user.role, "invoices.generate") ? (
+          <>
+            <LinkButton href="/fees/invoices/generate">Generate term invoices</LinkButton>
+            <LinkButton href="/fees/invoices/student" variant="outline">Generate invoice</LinkButton>
+          </>
+        ) : null}
       />
       {query.created ? <p className="mb-4 text-sm text-navy">Created {query.created}. Skipped {query.skipped ?? 0} students who already had this term invoice.</p> : null}
       <Surface className="mb-4 p-5">

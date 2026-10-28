@@ -3,6 +3,7 @@ import type { Role } from "@prisma/client";
 const MATRIX: Record<string, Role[]> = {
   "finance.read": ["administrator", "bursar"],
   "finance.write": ["administrator", "bursar"],
+  "invoices.generate": ["administrator", "bursar"],
   "academics.read": ["administrator", "teacher"],
   "academics.write": ["administrator", "teacher"],
   "academics.approve": ["administrator"],

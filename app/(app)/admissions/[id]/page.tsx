@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { enrollmentAllowed } from "@/lib/enrollment";
 import { formatDate, formatMoney } from "@/lib/format";
 import { can } from "@/lib/permissions";
+import { generateFirstTermInvoice } from "@/lib/server/billing";
 import { admissionPaymentAction, decisionAction, enrollAction, invoiceAction, uploadAction, waiveAction } from "@/lib/server/forms";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +38,7 @@ export default async function ApplicationPage({ params, searchParams }: { params
       decisions: { orderBy: { createdAt: "desc" } },
       invoices: { include: { items: true, allocations: { include: { payment: true } }, adjustments: true } },
       payments: { orderBy: { createdAt: "desc" } },
-      student: true,
+      student: { include: { invoices: { where: { kind: "school_fee" } } } },
     },
   });
   if (!application) notFound();
@@ -255,9 +256,23 @@ export default async function ApplicationPage({ params, searchParams }: { params
               </form>
             ) : null}
             {application.student ? (
-              <LinkButton href={`/students/${application.student.id}`} variant="outline" className="mt-3">
-                Open student record
-              </LinkButton>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <LinkButton href={`/students/${application.student.id}`} variant="outline">
+                  Open student record
+                </LinkButton>
+                {can(user.role, "invoices.generate") ? (
+                  application.student.invoices.some((item) => item.termLabel === application.termLabel) ? (
+                    <LinkButton href={`/fees/invoices/${application.student.invoices.find((item) => item.termLabel === application.termLabel)?.id}`} variant="outline">
+                      Open first-term invoice
+                    </LinkButton>
+                  ) : (
+                    <form action={generateFirstTermInvoice}>
+                      <input type="hidden" name="applicationId" value={application.id} />
+                      <Button type="submit">Generate first-term invoice</Button>
+                    </form>
+                  )
+                ) : null}
+              </div>
             ) : null}
           </div>
         </Surface>

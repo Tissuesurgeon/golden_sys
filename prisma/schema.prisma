@@ -354,11 +354,18 @@ model Document {
   @@index([ownerId])
 }
 
+enum FeeAppliesTo {
+  new
+  returning
+  all
+}
+
 model FeeItem {
   id          String         @id @default(cuid())
   name        String
   amount      Int
   kind        InvoiceKind    @default(school_fee)
+  appliesTo   FeeAppliesTo   @default(all)
   active      Boolean        @default(true)
   classes     FeeItemClass[]
   schedules   FeeSchedule[]

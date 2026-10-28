@@ -49,6 +49,14 @@ export default async function FeeItemsPage({ searchParams }: { searchParams: Pro
               Active
             </label>
           </div>
+          <label className="max-w-md text-sm text-ink">
+            Who pays this fee
+            <select className={`${selectClassName()} mt-1`} name="appliesTo" defaultValue={editing?.appliesTo ?? "all"} aria-label="Who this fee applies to">
+              <option value="all">Everyone — tuition, feeding, and other shared fees</option>
+              <option value="new">New students — first term only, such as admission, uniform, or PTA</option>
+              <option value="returning">Returning students only</option>
+            </select>
+          </label>
           <div className="text-sm text-ink">
             Class amounts are for the term selected above the list. Open an item again after changing term.
           </div>
@@ -86,7 +94,7 @@ export default async function FeeItemsPage({ searchParams }: { searchParams: Pro
             <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
               <span>
                 <span className="font-medium text-ink">{item.name}</span>
-                <span className="ml-2 text-muted-foreground">{formatMoney(item.amount)}{item.active ? "" : " · inactive"}</span>
+                <span className="ml-2 text-muted-foreground">{formatMoney(item.amount)} · {item.appliesTo === "new" ? "New students" : item.appliesTo === "returning" ? "Returning students" : "Everyone"}{item.active ? "" : " · inactive"}</span>
               </span>
               <a className="text-blue" href={`/fees/items?edit=${item.id}&termId=${termId}`}>Edit</a>
             </li>
