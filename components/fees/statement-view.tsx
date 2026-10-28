@@ -9,7 +9,7 @@ import { canViewFinance } from "@/lib/prototype/permissions";
 import { buildStatement, className, currentStaff, studentName } from "@/lib/prototype/selectors";
 import { usePrototype } from "@/lib/prototype/store";
 
-export function StatementView({ studentId }: { studentId: string }) {
+export function StatementView({ studentId, openBalance }: { studentId: string; openBalance: number }) {
   const { state } = usePrototype();
   const staff = currentStaff(state);
   const student = state.students.find((item) => item.id === studentId);
@@ -62,7 +62,7 @@ export function StatementView({ studentId }: { studentId: string }) {
           <Stat label="Charges" value={formatMoney(statement.charges)} />
           <Stat label="Payments" value={formatMoney(statement.payments)} />
           <Stat label="Adjustments" value={formatMoney(statement.adjustments)} />
-          <Stat label="Closing" value={formatMoney(statement.closing)} />
+          <Stat label="Closing" value={formatMoney(openBalance)} />
         </dl>
         <div className="mt-6 max-w-full overflow-x-auto">
         <table className="w-full min-w-[32rem] text-sm">

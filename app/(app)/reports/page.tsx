@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PageHeader, StatusBadge, Surface, sheetStatusLabel, sheetStatusTone } from "@/components/common/ui-bits";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { invoiceBalance } from "@/lib/finance";
 import { formatMoney } from "@/lib/format";
 import { can } from "@/lib/permissions";
 
@@ -30,7 +31,7 @@ export default async function ReportsPage() {
     prisma.student.groupBy({ by: ["status"], _count: true }),
     finance
       ? prisma.invoice.findMany({
-          where: { status: { notIn: ["cancelled", "reversed"] } },
+          where: {},
           include: { items: true, allocations: { include: { payment: true } }, adjustments: true },
         })
       : Promise.resolve([]),
@@ -38,16 +39,16 @@ export default async function ReportsPage() {
     academic ? prisma.markSheet.groupBy({ by: ["status"], _count: true }) : Promise.resolve([]),
     prisma.classRoom.findMany({ include: { enrollments: { where: { active: true } } } }),
   ]);
-  const charged = invoices.reduce((sum, invoice) => sum + invoice.items.reduce((inner, item) => inner + item.amount, 0), 0);
-  const adjusted = invoices.reduce(
-    (sum, invoice) => sum + invoice.adjustments.filter((item) => !item.reversedAt).reduce((inner, item) => inner + item.amount, 0),
-    0,
+  const totals = invoices.reduce(
+    (sum, invoice) => {
+      const balance = invoiceBalance(invoice);
+      return { charges: sum.charges + balance.charges, paid: sum.paid + balance.paid, balance: sum.balance + balance.balance };
+    },
+    { charges: 0, paid: 0, balance: 0 },
   );
-  const allocated = invoices.reduce(
-    (sum, invoice) => sum + invoice.allocations.filter((item) => !item.payment.reversedAt).reduce((inner, item) => inner + item.amount, 0),
-    0,
-  );
-  const open = charged + adjusted - allocated;
+  const charged = totals.charges;
+  const allocated = totals.paid;
+  const open = totals.balance;
   const rooms = [...classes].sort((a, b) => classRank(a.name) - classRank(b.name) || a.name.localeCompare(b.name));
   const admissionOrder = ["submitted", "under_review", "accepted", "enrolled", "waitlisted", "deferred", "rejected", "draft"];
 

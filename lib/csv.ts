@@ -1,5 +1,13 @@
 export type CsvRow = Record<string, string>;
 
+export function toCsv(headers: string[], rows: Array<Array<string | number>>) {
+  const cell = (value: string | number) => {
+    const text = String(value);
+    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+  return [headers, ...rows].map((row) => row.map(cell).join(",")).join("\n");
+}
+
 export function parseCsv(text: string): { headers: string[]; rows: CsvRow[] } {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length === 0) return { headers: [], rows: [] };

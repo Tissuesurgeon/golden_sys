@@ -3,6 +3,7 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { isoDate } from "@/lib/calendar";
+import { invoiceBalance } from "@/lib/finance";
 import { pdfResponse, renderPdf } from "@/lib/pdf";
 
 async function teacherOwnsStudent(user: CurrentUser, studentId: string) {
@@ -61,18 +62,25 @@ export async function GET(_request: Request, { params }: { params: Promise<{ kin
 
   if (kind === "statement") {
     if (!can(user.role, "finance.read")) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-    const student = await prisma.student.findUnique({ where: { id }, include: { invoices: { include: { items: true } }, payments: true, adjustments: true } });
+    const student = await prisma.student.findUnique({
+      where: { id },
+      include: { invoices: { include: { items: true, adjustments: true, allocations: { include: { payment: true } } } } },
+    });
     if (!student) return NextResponse.json({ error: "Not found." }, { status: 404 });
-    const charged = student.invoices.flatMap((invoice) => invoice.items).reduce((sum, item) => sum + item.amount, 0);
-    const paid = student.payments.filter((payment) => !payment.reversedAt).reduce((sum, payment) => sum + payment.amount, 0);
-    const adjusted = student.adjustments.filter((item) => !item.reversedAt).reduce((sum, item) => sum + item.amount, 0);
+    const totals = student.invoices.reduce(
+      (sum, invoice) => {
+        const balance = invoiceBalance(invoice);
+        return { charges: sum.charges + balance.charges, adjustments: sum.adjustments + balance.adjustments, paid: sum.paid + balance.paid, balance: sum.balance + balance.balance };
+      },
+      { charges: 0, adjustments: 0, paid: 0, balance: 0 },
+    );
     return pdf("Fee statement", [
       student.admissionNumber,
       `${student.firstName} ${student.lastName}`,
-      `Charges ${money(charged)}`,
-      `Adjustments ${money(adjusted)}`,
-      `Payments ${money(paid)}`,
-      `Balance ${money(charged + adjusted - paid)}`,
+      `Charges ${money(totals.charges)}`,
+      `Adjustments ${money(totals.adjustments)}`,
+      `Payments ${money(totals.paid)}`,
+      `Balance ${money(totals.balance)}`,
     ]);
   }
 
