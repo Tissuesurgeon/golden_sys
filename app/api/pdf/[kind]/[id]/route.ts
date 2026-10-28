@@ -1,11 +1,9 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { isoDate } from "@/lib/calendar";
+import { pdfResponse, renderPdf } from "@/lib/pdf";
 
 async function teacherOwnsStudent(user: CurrentUser, studentId: string) {
   if (user.role === "administrator") return true;
@@ -29,29 +27,7 @@ function money(pesewas: number) {
 }
 
 async function pdf(title: string, lines: string[]) {
-  const doc = await PDFDocument.create();
-  const page = doc.addPage([595, 842]);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  try {
-    const logo = await readFile(path.join(process.cwd(), "public/images/golden-child-school-logo.jpg"));
-    const image = await doc.embedJpg(logo);
-    page.drawImage(image, { x: 48, y: 760, width: 48, height: 48 });
-  } catch {
-    // The crest is optional for the PDF if the file cannot be read.
-  }
-  page.drawText("Golden Child School", { x: 108, y: 788, size: 16, font: bold, color: rgb(0.06, 0.18, 0.39) });
-  page.drawText(title, { x: 48, y: 730, size: 14, font: bold });
-  lines.forEach((line, index) => {
-    page.drawText(line.slice(0, 90), { x: 48, y: 700 - index * 18, size: 11, font });
-  });
-  const bytes = await doc.save();
-  return new NextResponse(Buffer.from(bytes), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${title.replace(/\s+/g, "-").toLowerCase()}.pdf"`,
-    },
-  });
+  return pdfResponse(title, await renderPdf(title, lines));
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ kind: string; id: string }> }) {

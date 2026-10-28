@@ -23,6 +23,12 @@ export async function writeAudit(entry: {
   });
 }
 
+export async function nextDocumentNumber(tx: Prisma.TransactionClient, kind: "invoice" | "receipt", issuedOn: Date) {
+  const year = issuedOn.getUTCFullYear();
+  const prefix = kind === "invoice" ? `INV-${year}-` : `RCT-${year}-`;
+  return nextNumber(tx, `${kind}:${year}`, prefix);
+}
+
 export async function nextNumber(tx: Prisma.TransactionClient, key: string, prefix: string) {
   const row = await tx.counter.upsert({
     where: { id: key },

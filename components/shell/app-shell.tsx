@@ -35,7 +35,9 @@ function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void })
   return (
     <nav className="flex flex-col gap-1 px-3" aria-label="Main">
       {NAV.filter((item) => item.roles.includes(role)).map((item) => {
-        const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const longer = NAV.some((other) => other.href.length > item.href.length && (pathname === other.href || pathname.startsWith(`${other.href}/`)));
+        const active = matches && !longer;
         const Icon = item.icon;
         return (
           <Link

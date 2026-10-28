@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { PaymentMethod as DbMethod, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { assertCan } from "@/lib/permissions";
-import { nextNumber } from "@/lib/audit";
+import { nextDocumentNumber } from "@/lib/audit";
 import { dateOnly, isoDate, termId, yearId, yearRange, termRange } from "@/lib/calendar";
 import { allocationError, invoiceDue } from "@/lib/money";
 import type { CurrentUser } from "@/lib/auth";
@@ -71,7 +71,7 @@ async function refreshInvoice(tx: Prisma.TransactionClient, invoiceId: string) {
     where: { id: invoiceId },
     include: { items: true, allocations: { include: { payment: true } }, adjustments: true },
   });
-  if (!invoice || invoice.status === "cancelled" || invoice.status === "reversed") return;
+  if (!invoice || invoice.status === "cancelled" || invoice.status === "reversed" || invoice.status === "carried_forward") return;
   const charges = invoice.items.reduce((sum, item) => sum + item.amount, 0);
   const paid = invoice.allocations.filter((item) => !item.payment.reversedAt).reduce((sum, item) => sum + item.amount, 0);
   const adjusted = invoice.adjustments.filter((item) => !item.reversedAt).reduce((sum, item) => sum + item.amount, 0);
@@ -191,7 +191,7 @@ export async function applyAction(user: CurrentUser, action: Action): Promise<{ 
           where: { active: true, kind: "school_fee", classes: { some: { classId: action.student.classId } } },
         });
         if (fees.length) {
-          const number = await nextNumber(tx, "invoice", "INV-");
+          const number = await nextDocumentNumber(tx, "invoice", new Date());
           await tx.invoice.create({
             data: {
               number,
@@ -299,7 +299,7 @@ export async function applyAction(user: CurrentUser, action: Action): Promise<{ 
         }
         const problem = allocationError(action.payment.amount, checked);
         if (problem) throw new Error(problem);
-        const receiptNumber = await nextNumber(tx, "receipt", "RCT-");
+        const receiptNumber = await nextDocumentNumber(tx, "receipt", dateOnly(action.payment.date));
         await tx.payment.create({
           data: {
             id: paymentId,

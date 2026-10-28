@@ -65,7 +65,7 @@ export async function loadOffice(user: CurrentUser, scope: OfficeScope, focusId?
         : Promise.resolve([]),
       wantsMoney
         ? prisma.invoice.findMany({
-            where: { status: { notIn: ["cancelled", "reversed"] }, ...(scope === "student" && focusId ? { studentId: focusId } : {}) },
+            where: { status: { notIn: ["cancelled", "reversed", "carried_forward"] }, ...(scope === "student" && focusId ? { studentId: focusId } : {}) },
             include: { items: true, year: true },
             take: 500,
           })

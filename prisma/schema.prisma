@@ -40,6 +40,7 @@ enum InvoiceStatus {
   overdue
   cancelled
   reversed
+  carried_forward
 }
 
 enum InvoiceKind {
@@ -142,6 +143,7 @@ model SchoolSettings {
   enrollmentPolicy   EnrollmentPolicy @default(full_or_waiver)
   minimumDeposit     Int              @default(0)
   admissionFee       Int              @default(0)
+  invoiceDueDays     Int              @default(14)
   updatedAt          DateTime         @updatedAt
 }
 
@@ -165,6 +167,8 @@ model Term {
   startsOn  DateTime @db.Date
   endsOn    DateTime @db.Date
   position  Int
+  invoices  Invoice[]
+  schedules FeeSchedule[]
 
   @@unique([yearId, label])
   @@index([yearId])
@@ -176,6 +180,7 @@ model ClassRoom {
   level        String
   teacherId    String?
   feeLinks     FeeItemClass[]
+  schedules    FeeSchedule[]
   enrollments  ClassEnrollment[]
   applications AdmissionApplication[]
   assignments  TeacherAssignment[]
@@ -350,6 +355,22 @@ model FeeItem {
   kind        InvoiceKind    @default(school_fee)
   active      Boolean        @default(true)
   classes     FeeItemClass[]
+  schedules   FeeSchedule[]
+}
+
+model FeeSchedule {
+  id        String    @id @default(cuid())
+  feeItemId String
+  classId   String
+  termId    String
+  amount    Int
+  feeItem   FeeItem   @relation(fields: [feeItemId], references: [id], onDelete: Cascade)
+  classRoom ClassRoom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  term      Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([feeItemId, classId, termId])
+  @@index([classId])
+  @@index([termId])
 }
 
 model FeeItemClass {
@@ -372,17 +393,25 @@ model Invoice {
   application   AdmissionApplication? @relation(fields: [applicationId], references: [id])
   yearId        String?
   year          AcademicYear?        @relation(fields: [yearId], references: [id])
+  termId        String?
+  term          Term?                @relation(fields: [termId], references: [id])
   termLabel     String
   issuedOn      DateTime             @db.Date
+  dueOn         DateTime?            @db.Date
+  carriedToInvoiceId String?
+  carriedTo     Invoice?             @relation("InvoiceCarry", fields: [carriedToInvoiceId], references: [id])
+  carriedFrom   Invoice[]            @relation("InvoiceCarry")
   notes         String               @default("")
   items         InvoiceItem[]
   allocations   PaymentAllocation[]
   adjustments   Adjustment[]
   createdAt     DateTime             @default(now())
 
+  @@unique([studentId, termId, kind])
   @@index([studentId])
   @@index([applicationId])
   @@index([yearId])
+  @@index([termId])
 }
 
 model InvoiceItem {

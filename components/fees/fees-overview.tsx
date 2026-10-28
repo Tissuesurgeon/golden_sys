@@ -65,7 +65,13 @@ export function FeesOverview() {
         title="Fees"
         description={`${state.term}, ${state.year}. Balances come from invoices, payments, and adjustments.`}
         actions={
-          canRecordPayments(staff.role) ? <LinkButton href="/fees/record">Record payment</LinkButton> : null
+          canRecordPayments(staff.role) ? (
+            <>
+              <LinkButton href="/fees/items" variant="outline">Fee items</LinkButton>
+              <LinkButton href="/fees/invoices" variant="outline">Invoices</LinkButton>
+              <LinkButton href="/fees/record">Record payment</LinkButton>
+            </>
+          ) : null
         }
       />
       <div className="mb-4 grid gap-3 md:grid-cols-4">

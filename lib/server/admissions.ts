@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ApplicationStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { nextNumber } from "@/lib/audit";
+import { nextDocumentNumber, nextNumber } from "@/lib/audit";
 import { dateOnly, isoDate } from "@/lib/calendar";
 import { enrollmentAllowed } from "@/lib/enrollment";
 import type { CurrentUser } from "@/lib/auth";
@@ -123,7 +123,7 @@ export async function issueAdmissionInvoice(user: CurrentUser, id: string) {
     const settings = await tx.schoolSettings.findUnique({ where: { id: "school" } });
     const items = fees.length ? fees.map((fee) => ({ label: fee.name, amount: fee.amount, feeItemId: fee.id })) : [{ label: "Admission fee", amount: settings?.admissionFee ?? 0, feeItemId: null }];
     if (items.reduce((sum, item) => sum + item.amount, 0) <= 0) throw new Error("Set an admission fee before issuing an invoice.");
-    const number = await nextNumber(tx, "invoice", "INV-");
+    const number = await nextDocumentNumber(tx, "invoice", new Date());
     await tx.invoice.create({
       data: {
         number,
@@ -157,7 +157,7 @@ export async function recordAdmissionPayment(
     const adjusted = invoice.adjustments.filter((item) => !item.reversedAt).reduce((sum, item) => sum + item.amount, 0);
     const due = Math.max(0, total + adjusted - paid);
     const allocate = Math.min(due, input.amount);
-    const receiptNumber = await nextNumber(tx, "receipt", "RCT-");
+    const receiptNumber = await nextDocumentNumber(tx, "receipt", dateOnly(input.date));
     const paymentId = `pay-${randomBytes(6).toString("hex")}`;
     await tx.payment.create({
       data: {
