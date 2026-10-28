@@ -2,10 +2,26 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { isoDate } from "@/lib/calendar";
+
+async function teacherOwnsStudent(user: CurrentUser, studentId: string) {
+  if (user.role === "administrator") return true;
+  if (!user.staffId) return false;
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "school" } });
+  const enrollment = await prisma.classEnrollment.findFirst({
+    where: { studentId, active: true, yearId: settings?.academicYearId ?? undefined },
+    include: { classRoom: true },
+  });
+  if (!enrollment) return false;
+  if (enrollment.classRoom.teacherId === user.staffId) return true;
+  const assignment = await prisma.teacherAssignment.findFirst({
+    where: { staffId: user.staffId, classId: enrollment.classId, yearId: enrollment.yearId },
+  });
+  return Boolean(assignment);
+}
 
 function money(pesewas: number) {
   const sign = pesewas < 0 ? "-" : "";
@@ -88,6 +104,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ kin
     if (!can(user.role, "academics.read")) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     const snapshot = await prisma.reportCardSnapshot.findFirst({ where: { studentId: id }, orderBy: { version: "desc" }, include: { student: true } });
     if (!snapshot) return NextResponse.json({ error: "No published report card yet." }, { status: 404 });
+    if (!(await teacherOwnsStudent(user, snapshot.studentId))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     const payload = snapshot.payload as { name?: string; className?: string; subjects?: { subject: string; total: number | null; grade: string | null }[] };
     const lines = [`${payload.name ?? snapshot.student.firstName} · ${snapshot.yearLabel} ${snapshot.termLabel}`, payload.className ?? "", `Version ${snapshot.version}`];
     for (const subject of payload.subjects ?? []) lines.push(`${subject.subject}: ${subject.total ?? "—"} ${subject.grade ?? ""}`);

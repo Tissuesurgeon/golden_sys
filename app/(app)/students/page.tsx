@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { LoadingRows, Surface } from "@/components/common/ui-bits";
+import { OfficeFrame } from "@/components/data/office-frame";
 import { StudentDirectory } from "@/components/students/student-directory";
 
 export default function StudentsPage() {
@@ -11,7 +12,9 @@ export default function StudentsPage() {
         </Surface>
       }
     >
-      <StudentDirectory />
+      <OfficeFrame scope="students">
+        <StudentDirectory />
+      </OfficeFrame>
     </Suspense>
   );
 }

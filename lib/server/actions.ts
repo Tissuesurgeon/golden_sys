@@ -1,14 +1,16 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { consumePasswordReset, destroySession, issuePasswordReset, requireUser, signInWithPassword } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
-import { applyAction } from "@/lib/server/mutate";
 import { prisma } from "@/lib/db";
 
 export async function signInAction(email: string, password: string) {
-  const result = await signInWithPassword(email, password);
+  const requestHeaders = await headers();
+  const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || "unknown";
+  const result = await signInWithPassword(email, password, ip);
   if (!result.ok) return { error: result.error };
   return { error: "" };
 }
@@ -16,17 +18,6 @@ export async function signInAction(email: string, password: string) {
 export async function signOutAction() {
   await destroySession();
   redirect("/login");
-}
-
-export async function commitAction(action: { type: string; [key: string]: unknown }) {
-  const user = await requireUser();
-  try {
-    const result = await applyAction(user, action as Parameters<typeof applyAction>[1]);
-    revalidatePath("/", "layout");
-    return { error: "", ...result };
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : "That action could not be saved." };
-  }
 }
 
 export async function resetLinkAction(userId: string) {

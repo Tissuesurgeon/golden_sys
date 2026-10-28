@@ -8,7 +8,7 @@ import { dateOnly, isoDate } from "@/lib/calendar";
 import { enrollmentAllowed } from "@/lib/enrollment";
 import type { CurrentUser } from "@/lib/auth";
 import { assertCan } from "@/lib/permissions";
-import { privateStorageDir } from "@/lib/storage";
+import { privateStorageDir, sniffDocument } from "@/lib/storage";
 
 async function audit(tx: Prisma.TransactionClient, actorId: string, action: string, entityType: string, entityId: string, summary: string) {
   await tx.auditLog.create({ data: { actorId, action, entityType, entityId, summary } });
@@ -168,7 +168,7 @@ export async function recordAdmissionPayment(
         method: input.method,
         reference: input.reference,
         amount: input.amount,
-        recordedById: user.staffId ?? user.id,
+        recordedById: user.id,
         note: "Recorded by the school. Not verified by a payment gateway.",
         allocations: allocate > 0 ? { create: [{ invoiceId: invoice.id, amount: allocate }] } : undefined,
       },
@@ -284,10 +284,12 @@ export async function grantWaiver(user: CurrentUser, applicationId: string, reas
 export async function saveDocument(user: CurrentUser, applicationId: string, file: File) {
   assertCan(user.role, "admissions.manage");
   if (file.size > 8_000_000) throw new Error("Documents must be 8 MB or smaller.");
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const mime = sniffDocument(bytes);
+  if (!mime) throw new Error("Upload a PDF, JPEG, or PNG.");
   const storedName = `${randomBytes(16).toString("hex")}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
   const directory = privateStorageDir();
   await mkdir(directory, { recursive: true });
-  const bytes = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(/*turbopackIgnore: true*/ directory, storedName), bytes);
   await prisma.document.create({
     data: {
@@ -295,8 +297,8 @@ export async function saveDocument(user: CurrentUser, applicationId: string, fil
       ownerId: applicationId,
       filename: file.name,
       storedName,
-      mime: file.type || "application/octet-stream",
-      size: file.size,
+      mime,
+      size: bytes.length,
       uploadedById: user.id,
     },
   });

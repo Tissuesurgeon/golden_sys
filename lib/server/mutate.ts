@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { assertCan } from "@/lib/permissions";
 import { nextNumber } from "@/lib/audit";
 import { dateOnly, isoDate, termId, yearId, yearRange, termRange } from "@/lib/calendar";
+import { allocationError, invoiceDue } from "@/lib/money";
 import type { CurrentUser } from "@/lib/auth";
 import { hashPassword } from "@/lib/auth";
 import type { PaymentMethod, SchoolSettings } from "@/lib/prototype/types";
@@ -278,13 +279,26 @@ export async function applyAction(user: CurrentUser, action: Action): Promise<{ 
         });
         const byInvoice = new Map<string, number>();
         for (const allocation of action.payment.allocations) {
-          if (allocation.amount <= 0) continue;
           const item = items.find((entry) => entry.id === allocation.chargeId);
           if (!item || item.invoice.studentId !== action.payment.studentId) throw new Error("A selected charge does not belong to this student.");
           byInvoice.set(item.invoiceId, (byInvoice.get(item.invoiceId) ?? 0) + allocation.amount);
         }
-        const allocated = [...byInvoice.values()].reduce((sum, amount) => sum + amount, 0);
-        if (allocated > action.payment.amount) throw new Error("Allocations cannot exceed the payment.");
+        const checked: { amount: number; remaining: number }[] = [];
+        for (const [invoiceId, amount] of byInvoice) {
+          const invoice = await tx.invoice.findUnique({
+            where: { id: invoiceId },
+            include: { items: true, allocations: { include: { payment: true } }, adjustments: true },
+          });
+          if (!invoice) throw new Error("A selected charge does not belong to this student.");
+          const remaining = invoiceDue({
+            charges: invoice.items.reduce((sum, item) => sum + item.amount, 0),
+            adjustments: invoice.adjustments.filter((item) => !item.reversedAt).reduce((sum, item) => sum + item.amount, 0),
+            paid: invoice.allocations.filter((item) => !item.payment.reversedAt).reduce((sum, item) => sum + item.amount, 0),
+          });
+          checked.push({ amount, remaining });
+        }
+        const problem = allocationError(action.payment.amount, checked);
+        if (problem) throw new Error(problem);
         const receiptNumber = await nextNumber(tx, "receipt", "RCT-");
         await tx.payment.create({
           data: {
@@ -295,7 +309,7 @@ export async function applyAction(user: CurrentUser, action: Action): Promise<{ 
             method: METHODS[action.payment.method],
             reference: action.payment.reference,
             amount: action.payment.amount,
-            recordedById: user.staffId ?? user.id,
+            recordedById: user.id,
             note: "Recorded by the school. Not verified by a payment gateway.",
             allocations: { create: [...byInvoice.entries()].map(([invoiceId, amount]) => ({ invoiceId, amount })) },
           },

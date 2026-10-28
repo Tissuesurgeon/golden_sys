@@ -8,14 +8,15 @@ import { importGuardiansAction, importStaffAction, importStudentsAction } from "
 const fileClass =
   "block h-11 w-full min-w-0 rounded-lg border border-input bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-sm file:font-medium file:text-ink";
 
-export default async function ImportPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function ImportPage({ searchParams }: { searchParams: Promise<{ error?: string; tab?: string }> }) {
   const user = await requireUser();
   if (!can(user.role, "students.write")) redirect("/dashboard");
-  const { error } = await searchParams;
+  const { error, tab } = await searchParams;
   return (
     <div>
       <PageHeader title="Import records" description="Each file is checked before anything is saved. A row with an error stops that import, and the message lists the row." />
       {error ? <p className="mb-4 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">{error}</p> : null}
+      {tab === "staff" ? <p className="mb-4 text-sm text-muted-foreground">The staff file needs another look. The form is below.</p> : null}
       <div className="grid gap-4">
         <ImportCard
           title="Students"
@@ -32,6 +33,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
           button="Import guardians"
         />
         <ImportCard
+          id="staff"
           title="Staff"
           body="Imported accounts stay inactive. Issue a reset link from Users and Permissions before they can sign in."
           columns={["name", "email", "role"]}
@@ -44,12 +46,14 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
 }
 
 function ImportCard({
+  id,
   title,
   body,
   columns,
   action,
   button,
 }: {
+  id?: string;
   title: string;
   body: string;
   columns: string[];
@@ -57,7 +61,7 @@ function ImportCard({
   button: string;
 }) {
   return (
-    <Surface className="p-5">
+    <Surface id={id} className="p-5">
       <h2 className="text-lg font-semibold text-navy">{title}</h2>
       <p className="mt-1 text-sm leading-6 text-muted-foreground">{body}</p>
       <ul className="mt-3 flex flex-wrap gap-1.5">

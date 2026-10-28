@@ -101,6 +101,19 @@ model PasswordReset {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
 }
 
 model Staff {
@@ -154,6 +167,7 @@ model Term {
   position  Int
 
   @@unique([yearId, label])
+  @@index([yearId])
 }
 
 model ClassRoom {
@@ -166,6 +180,8 @@ model ClassRoom {
   applications AdmissionApplication[]
   assignments  TeacherAssignment[]
   configs      AssessmentConfig[]
+
+  @@index([teacherId])
 }
 
 model Subject {
@@ -197,6 +213,9 @@ model TeacherAssignment {
   subject   Subject      @relation(fields: [subjectId], references: [id])
 
   @@unique([staffId, yearId, classId, subjectId])
+  @@index([staffId])
+  @@index([classId])
+  @@index([yearId])
 }
 
 model Student {
@@ -240,6 +259,8 @@ model StudentGuardian {
   primary      Boolean  @default(false)
 
   @@unique([studentId, guardianId])
+  @@index([studentId])
+  @@index([guardianId])
 }
 
 model ClassEnrollment {
@@ -253,6 +274,9 @@ model ClassEnrollment {
   active    Boolean      @default(true)
 
   @@unique([studentId, yearId])
+  @@index([studentId])
+  @@index([classId])
+  @@index([yearId])
 }
 
 model AdmissionApplication {
@@ -278,6 +302,9 @@ model AdmissionApplication {
   invoices        Invoice[]
   payments        Payment[]
   student         Student?
+
+  @@index([intendedClassId])
+  @@index([yearId])
 }
 
 model ApplicationGuardian {
@@ -312,6 +339,8 @@ model Document {
   size         Int
   uploadedById String
   createdAt    DateTime @default(now())
+
+  @@index([ownerId])
 }
 
 model FeeItem {
@@ -350,6 +379,10 @@ model Invoice {
   allocations   PaymentAllocation[]
   adjustments   Adjustment[]
   createdAt     DateTime             @default(now())
+
+  @@index([studentId])
+  @@index([applicationId])
+  @@index([yearId])
 }
 
 model InvoiceItem {
@@ -359,6 +392,8 @@ model InvoiceItem {
   label       String
   amount      Int
   feeItemId   String?
+
+  @@index([invoiceId])
 }
 
 model Payment {
@@ -377,6 +412,9 @@ model Payment {
   reversedAt    DateTime?
   allocations   PaymentAllocation[]
   createdAt     DateTime          @default(now())
+
+  @@index([studentId])
+  @@index([applicationId])
 }
 
 model PaymentAllocation {
@@ -386,6 +424,9 @@ model PaymentAllocation {
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id])
   amount    Int
+
+  @@index([paymentId])
+  @@index([invoiceId])
 }
 
 model Adjustment {
@@ -402,6 +443,9 @@ model Adjustment {
   createdById String
   createdAt   DateTime @default(now())
   reversedAt  DateTime?
+
+  @@index([studentId])
+  @@index([invoiceId])
 }
 
 model Reversal {
@@ -427,6 +471,8 @@ model AssessmentConfig {
   sheets     MarkSheet[]
 
   @@unique([yearId, termLabel, classId, subjectId])
+  @@index([classId])
+  @@index([yearId])
 }
 
 model MarkSheet {
@@ -437,6 +483,8 @@ model MarkSheet {
   returnReason String?
   rows         MarkRow[]
   events       ResultEvent[]
+
+  @@index([configId])
 }
 
 model MarkRow {
@@ -449,6 +497,8 @@ model MarkRow {
   remark    String?
 
   @@unique([sheetId, studentId])
+  @@index([sheetId])
+  @@index([studentId])
 }
 
 model ResultEvent {
@@ -459,6 +509,8 @@ model ResultEvent {
   comment   String    @default("")
   actorId   String
   createdAt DateTime  @default(now())
+
+  @@index([sheetId])
 }
 
 model ReportCardSnapshot {
@@ -473,6 +525,7 @@ model ReportCardSnapshot {
   createdAt   DateTime @default(now())
 
   @@unique([studentId, yearLabel, termLabel, version])
+  @@index([studentId])
 }
 
 model AuditLog {
@@ -486,6 +539,9 @@ model AuditLog {
   before     Json?
   after      Json?
   createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId])
 }
 
 model Counter {

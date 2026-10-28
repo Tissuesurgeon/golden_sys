@@ -19,26 +19,72 @@ function studentStatus(status: DbStatus): StudentStatus {
   return "withdrawn";
 }
 
-export async function loadSnapshot(user: CurrentUser): Promise<PrototypeState> {
-  const [settings, years, classes, subjects, bands, staff, students, links, invoices, payments, adjustments, configs, sheets, assignments] =
+export type OfficeScope = "dashboard" | "students" | "student" | "fees" | "academics" | "reports" | "classes" | "staff" | "settings";
+
+export async function loadShell(user: CurrentUser) {
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "school" } });
+  if (!settings) throw new Error("School settings have not been seeded.");
+  return { user: { name: user.name, role: user.role }, school: { name: settings.name, town: settings.town } };
+}
+
+export async function loadOffice(user: CurrentUser, scope: OfficeScope, focusId?: string): Promise<PrototypeState> {
+  const teacher = user.role === "teacher";
+  const bursar = user.role === "bursar";
+  const showMoney = user.role === "administrator" || bursar;
+  const wantsMoney = scope === "fees" || (scope === "student" && showMoney) || (scope === "students" && showMoney) || (scope === "dashboard" && showMoney);
+  const wantsAcademic = scope === "academics" || scope === "reports" || (scope === "student" && !bursar) || (scope === "dashboard" && !bursar);
+  const wantsStudents = scope === "dashboard" || scope === "students" || scope === "student" || scope === "fees" || scope === "academics" || scope === "reports";
+  const wantsAllStaff = scope === "staff" || scope === "classes" || scope === "settings" || scope === "academics";
+  const assignments = teacher && user.staffId ? await prisma.teacherAssignment.findMany({ where: { staffId: user.staffId } }) : [];
+  const assignedClassIds = [...new Set(assignments.map((item) => item.classId))];
+  const studentWhere: Prisma.StudentWhereInput =
+    teacher && !user.staffId
+      ? { id: "__none__" }
+      : teacher
+        ? { enrollments: { some: { active: true, classId: { in: assignedClassIds } } } }
+        : {};
+  if (scope === "student" && focusId) studentWhere.id = focusId;
+
+  const [settings, years, classes, subjects, bands, staff, students, links, invoices, payments, adjustments, configs, sheets] =
     await Promise.all([
       prisma.schoolSettings.findUnique({ where: { id: "school" } }),
       prisma.academicYear.findMany({ include: { terms: true }, orderBy: { label: "desc" } }),
       prisma.classRoom.findMany({ orderBy: { name: "asc" } }),
-      prisma.subject.findMany({ orderBy: { name: "asc" } }),
+      scope === "settings" ? Promise.resolve([]) : prisma.subject.findMany({ orderBy: { name: "asc" } }),
       prisma.gradingBand.findMany({ orderBy: { sort: "asc" } }),
-      prisma.staff.findMany({ include: { user: true, assignments: true } }),
-      prisma.student.findMany({ include: { enrollments: { where: { active: true } } } }),
-      prisma.studentGuardian.findMany({ include: { guardian: true } }),
-      prisma.invoice.findMany({
-        where: { status: { notIn: ["cancelled", "reversed"] } },
-        include: { items: true, year: true },
-      }),
-      prisma.payment.findMany({ where: { reversedAt: null }, include: { allocations: true } }),
-      prisma.adjustment.findMany({ where: { reversedAt: null } }),
-      prisma.assessmentConfig.findMany({ include: { year: true } }),
-      prisma.markSheet.findMany({ include: { rows: true } }),
-      prisma.teacherAssignment.findMany(),
+      wantsAllStaff
+        ? prisma.staff.findMany({ include: { user: true, assignments: true } })
+        : user.staffId
+          ? prisma.staff.findMany({ where: { id: user.staffId }, include: { user: true, assignments: true } })
+          : Promise.resolve([]),
+      wantsStudents
+        ? prisma.student.findMany({ where: studentWhere, take: scope === "student" ? 1 : 200, include: { enrollments: { where: { active: true } } } })
+        : Promise.resolve([]),
+      scope === "student" || scope === "students"
+        ? prisma.studentGuardian.findMany({ where: scope === "student" && focusId ? { studentId: focusId } : undefined, include: { guardian: true }, take: 400 })
+        : Promise.resolve([]),
+      wantsMoney
+        ? prisma.invoice.findMany({
+            where: { status: { notIn: ["cancelled", "reversed"] }, ...(scope === "student" && focusId ? { studentId: focusId } : {}) },
+            include: { items: true, year: true },
+            take: 500,
+          })
+        : Promise.resolve([]),
+      wantsMoney
+        ? prisma.payment.findMany({
+            where: { reversedAt: null, ...(scope === "student" && focusId ? { studentId: focusId } : {}) },
+            include: { allocations: true },
+            take: 500,
+          })
+        : Promise.resolve([]),
+      wantsMoney
+        ? prisma.adjustment.findMany({
+            where: { reversedAt: null, ...(scope === "student" && focusId ? { studentId: focusId } : {}) },
+            take: 500,
+          })
+        : Promise.resolve([]),
+      wantsAcademic ? prisma.assessmentConfig.findMany({ include: { year: true } }) : Promise.resolve([]),
+      wantsAcademic ? prisma.markSheet.findMany({ include: { rows: true } }) : Promise.resolve([]),
     ]);
 
   if (!settings) throw new Error("School settings have not been seeded.");
@@ -60,8 +106,12 @@ export async function loadSnapshot(user: CurrentUser): Promise<PrototypeState> {
   let visibleSheets = sheets;
   let visibleConfigs = configs;
   let visibleStaff = staffView;
-  const teacher = user.role === "teacher";
-  const bursar = user.role === "bursar";
+  if (teacher && !user.staffId) {
+    visibleStudents = [];
+    visibleSheets = [];
+    visibleConfigs = [];
+    visibleStaff = [];
+  }
 
   if (teacher && user.staffId) {
     const mine = assignments.filter((item) => item.staffId === user.staffId);
@@ -82,9 +132,8 @@ export async function loadSnapshot(user: CurrentUser): Promise<PrototypeState> {
   }
 
   const studentIds = new Set(visibleStudents.map((student) => student.id));
-  const showMoney = user.role === "administrator" || user.role === "bursar";
 
-  const charges = showMoney
+  const charges = showMoney && wantsMoney
     ? invoices
         .filter((invoice) => invoice.studentId && studentIds.has(invoice.studentId))
         .flatMap((invoice) =>

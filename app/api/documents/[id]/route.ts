@@ -1,10 +1,9 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
-import { privateStorageDir } from "@/lib/storage";
+import { fileInsideStorage } from "@/lib/storage";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -12,10 +11,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const document = await prisma.document.findUnique({ where: { id } });
   if (!document) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  const file = await readFile(path.join(/*turbopackIgnore: true*/ privateStorageDir(), document.storedName));
+  const target = fileInsideStorage(document.storedName);
+  if (!target) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const file = await readFile(target);
   return new NextResponse(file, {
     headers: {
       "Content-Type": document.mime,
+      "X-Content-Type-Options": "nosniff",
       "Content-Disposition": `attachment; filename="${document.filename.replace(/"/g, "")}"`,
     },
   });

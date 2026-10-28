@@ -2,7 +2,25 @@
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { commitAction, signOutAction } from "@/lib/server/actions";
+import { signOutAction } from "@/lib/server/actions";
+import {
+  addConfig,
+  addGuardian,
+  addStudent,
+  approveMarks,
+  inviteStaff,
+  publishSheet,
+  recordPayment,
+  returnMarks,
+  saveConfig,
+  saveMarks,
+  submitMarks,
+  updateSchool,
+  updateStaff,
+  updateStudent,
+  upsertClass,
+  upsertSubject,
+} from "@/lib/server/office-actions";
 import type {
   AssessmentComponent,
   ClassRoom,
@@ -67,7 +85,7 @@ export function PrototypeProvider({ initial, children }: { initial: PrototypeSta
           return;
         }
         if (action.type === "sign-in" || action.type === "hydrate" || action.type === "reset") return;
-        const result = await commitAction(action as { type: string; [key: string]: unknown });
+        const result = await callOffice(action);
         if (result.error) return result.error;
         router.refresh();
       },
@@ -76,6 +94,45 @@ export function PrototypeProvider({ initial, children }: { initial: PrototypeSta
   );
 
   return <PrototypeContext.Provider value={value}>{children}</PrototypeContext.Provider>;
+}
+
+async function callOffice(action: Exclude<Action, { type: "hydrate" | "sign-in" | "sign-out" | "set-period" | "reset" }>) {
+  switch (action.type) {
+    case "add-student":
+      return addStudent(action);
+    case "update-student":
+      return updateStudent(action.student);
+    case "add-guardian":
+      return addGuardian(action.guardian);
+    case "record-payment":
+      return recordPayment(action.payment);
+    case "save-marks":
+      return saveMarks(action.sheetId, action.rows);
+    case "submit-marks":
+      return submitMarks(action.sheetId);
+    case "return-marks":
+      return returnMarks(action.sheetId, action.reason);
+    case "approve-marks":
+      return approveMarks(action.sheetId);
+    case "publish-sheet":
+      return publishSheet(action.sheetId);
+    case "save-config":
+      return saveConfig(action.configId, action.components, action.status);
+    case "add-config":
+      return addConfig(action);
+    case "upsert-class":
+      return upsertClass(action.classRoom);
+    case "upsert-subject":
+      return upsertSubject(action.subject);
+    case "invite-staff":
+      return inviteStaff(action);
+    case "update-staff":
+      return updateStaff(action);
+    case "update-school":
+      return updateSchool(action.school);
+    default:
+      throw new Error("Unknown operation.");
+  }
 }
 
 export function usePrototype() {

@@ -40,9 +40,9 @@ export function PageHeader({
   );
 }
 
-export function Surface({ className, children }: { className?: string; children: React.ReactNode }) {
+export function Surface({ id, className, children }: { id?: string; className?: string; children: React.ReactNode }) {
   return (
-    <section className={cn("rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgb(16_46_99/0.04)]", className)}>
+    <section id={id} className={cn("rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgb(16_46_99/0.04)]", className)}>
       {children}
     </section>
   );

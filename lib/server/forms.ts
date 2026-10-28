@@ -213,11 +213,11 @@ export async function importStaffAction(formData: FormData) {
   const user = await requireUser();
   assertCan(user.role, "staff.manage");
   const file = formData.get("file");
-  if (!(file instanceof File)) redirect("/students/import?error=Choose%20a%20CSV%20file");
+  if (!(file instanceof File)) redirect("/students/import?tab=staff&error=Choose%20a%20CSV%20file");
   const parsed = parseCsv(await file.text());
   const errors = staffImportErrors(parsed.rows);
   if (errors.length || parsed.rows.length === 0) {
-    redirect(`/students/import?error=${encodeURIComponent(errors.join(" ") || "The file has no staff rows.")}`);
+    redirect(`/students/import?tab=staff&error=${encodeURIComponent(errors.join(" ") || "The file has no staff rows.")}`);
   }
   await prisma.$transaction(async (tx) => {
     for (const row of parsed.rows) {
@@ -246,11 +246,10 @@ export async function importStaffAction(formData: FormData) {
 }
 
 export async function adjustmentFormAction(formData: FormData) {
-  const { commitAction } = await import("@/lib/server/actions");
+  const { addAdjustment } = await import("@/lib/server/office-actions");
   const studentId = String(formData.get("studentId") || "");
   const ghs = Number(formData.get("amount") || 0);
-  const result = await commitAction({
-    type: "add-adjustment",
+  const result = await addAdjustment({
     studentId,
     year: String(formData.get("year") || ""),
     term: String(formData.get("term") || ""),
@@ -263,13 +262,9 @@ export async function adjustmentFormAction(formData: FormData) {
 }
 
 export async function reversePaymentAction(formData: FormData) {
-  const { commitAction } = await import("@/lib/server/actions");
+  const { reversePayment } = await import("@/lib/server/office-actions");
   const paymentId = String(formData.get("paymentId") || "");
-  const result = await commitAction({
-    type: "reverse-payment",
-    paymentId,
-    reason: String(formData.get("reason") || ""),
-  });
+  const result = await reversePayment(paymentId, String(formData.get("reason") || ""));
   if (result.error) redirect(`/fees/receipts/${paymentId}?error=${encodeURIComponent(result.error)}`);
   redirect(`/fees/receipts/${paymentId}`);
 }

@@ -90,11 +90,22 @@ export async function requireUser() {
   return user;
 }
 
-export async function signInWithPassword(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-  if (!user || !user.active) return { ok: false as const, error: "Those sign-in details were not recognised." };
-  const match = await verifyPassword(user.passwordHash, password);
-  if (!match) return { ok: false as const, error: "Those sign-in details were not recognised." };
+const SIGN_IN_ERROR = "Those sign-in details were not recognised.";
+
+export async function signInWithPassword(email: string, password: string, ip = "unknown") {
+  const normalised = email.trim().toLowerCase();
+  const since = new Date(Date.now() - 15 * 60 * 1000);
+  const failures = await prisma.loginAttempt.count({
+    where: { success: false, createdAt: { gte: since }, OR: [{ email: normalised }, { ip }] },
+  });
+  if (failures >= 5) {
+    await prisma.loginAttempt.create({ data: { email: normalised, ip, success: false } });
+    return { ok: false as const, error: SIGN_IN_ERROR };
+  }
+  const user = await prisma.user.findUnique({ where: { email: normalised } });
+  const match = user?.active ? await verifyPassword(user.passwordHash, password) : false;
+  await prisma.loginAttempt.create({ data: { email: normalised, ip, success: Boolean(match && user) } });
+  if (!user || !user.active || !match) return { ok: false as const, error: SIGN_IN_ERROR };
   await createSession(user.id);
   return { ok: true as const };
 }
@@ -102,6 +113,7 @@ export async function signInWithPassword(email: string, password: string) {
 export async function issuePasswordReset(userId: string, actorId: string) {
   const token = randomBytes(24).toString("base64url");
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  await prisma.passwordReset.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
   await prisma.passwordReset.create({
     data: { tokenHash: hashToken(token), userId, expiresAt },
   });
