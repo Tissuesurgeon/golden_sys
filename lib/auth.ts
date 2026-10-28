@@ -107,7 +107,7 @@ export async function signInWithPassword(email: string, password: string, ip = "
   await prisma.loginAttempt.create({ data: { email: normalised, ip, success: Boolean(match && user) } });
   if (!user || !user.active || !match) return { ok: false as const, error: SIGN_IN_ERROR };
   await createSession(user.id);
-  return { ok: true as const };
+  return { ok: true as const, role: user.role };
 }
 
 export async function issuePasswordReset(userId: string, actorId: string) {

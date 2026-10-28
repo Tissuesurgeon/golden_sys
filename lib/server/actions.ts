@@ -11,8 +11,8 @@ export async function signInAction(email: string, password: string) {
   const requestHeaders = await headers();
   const ip = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || "unknown";
   const result = await signInWithPassword(email, password, ip);
-  if (!result.ok) return { error: result.error };
-  return { error: "" };
+  if (!result.ok) return { error: result.error, role: "" };
+  return { error: "", role: result.role };
 }
 
 export async function signOutAction() {

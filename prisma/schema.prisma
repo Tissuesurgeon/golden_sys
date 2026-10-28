@@ -81,6 +81,7 @@ model User {
   sessions     Session[]
   resets       PasswordReset[]
   audits       AuditLog[]
+  attendance   Attendance[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
@@ -167,8 +168,10 @@ model Term {
   startsOn  DateTime @db.Date
   endsOn    DateTime @db.Date
   position  Int
-  invoices  Invoice[]
-  schedules FeeSchedule[]
+  invoices   Invoice[]
+  schedules  FeeSchedule[]
+  attendance Attendance[]
+  reports    TermReport[]
 
   @@unique([yearId, label])
   @@index([yearId])
@@ -185,6 +188,7 @@ model ClassRoom {
   applications AdmissionApplication[]
   assignments  TeacherAssignment[]
   configs      AssessmentConfig[]
+  attendance   Attendance[]
 
   @@index([teacherId])
 }
@@ -243,6 +247,8 @@ model Student {
   adjustments        Adjustment[]
   markRows           MarkRow[]
   reports            ReportCardSnapshot[]
+  attendance         Attendance[]
+  termReports        TermReport[]
 }
 
 model Guardian {
@@ -497,6 +503,7 @@ model AssessmentConfig {
   subject    Subject      @relation(fields: [subjectId], references: [id])
   components Json
   status     String
+  deadline   DateTime? @db.Date
   sheets     MarkSheet[]
 
   @@unique([yearId, termLabel, classId, subjectId])
@@ -576,4 +583,48 @@ model AuditLog {
 model Counter {
   id    String @id
   value Int    @default(0)
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+  excused
+}
+
+model Attendance {
+  id           String           @id @default(cuid())
+  studentId    String
+  student      Student          @relation(fields: [studentId], references: [id])
+  classId      String
+  classRoom    ClassRoom        @relation(fields: [classId], references: [id])
+  termId       String
+  term         Term             @relation(fields: [termId], references: [id])
+  date         DateTime         @db.Date
+  status       AttendanceStatus
+  note         String           @default("")
+  recordedById String
+  recordedBy   User             @relation(fields: [recordedById], references: [id])
+
+  @@unique([studentId, date])
+  @@index([studentId])
+  @@index([classId])
+  @@index([termId])
+}
+
+model TermReport {
+  id          String  @id @default(cuid())
+  studentId   String
+  student     Student @relation(fields: [studentId], references: [id])
+  termId      String
+  term        Term    @relation(fields: [termId], references: [id])
+  remark      String  @default("")
+  conduct     String  @default("")
+  attitude    String  @default("")
+  interest    String  @default("")
+  updatedById String
+
+  @@unique([studentId, termId])
+  @@index([studentId])
+  @@index([termId])
 }

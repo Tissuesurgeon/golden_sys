@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { assertCan } from "@/lib/permissions";
 import { nextDocumentNumber } from "@/lib/audit";
 import { dateOnly, isoDate, termId, yearId, yearRange, termRange } from "@/lib/calendar";
+import { attendanceTotals, ranksWithTies, showsPosition } from "@/lib/academics";
 import { allocationError, invoiceDue } from "@/lib/money";
 import type { CurrentUser } from "@/lib/auth";
 import { hashPassword } from "@/lib/auth";
@@ -97,6 +98,19 @@ async function assertSheetAccess(user: CurrentUser, sheetId: string, write: "ent
   return sheet;
 }
 
+function subjectLine(
+  item: { rows: { scores: Prisma.JsonValue; remark: string | null }[]; config: { subject: { name: string }; components: Prisma.JsonValue } },
+  bands: { min: number; grade: string }[],
+) {
+  const mark = item.rows[0];
+  const components = item.config.components as { id: string; name: string; max: number }[];
+  const scores = (mark?.scores ?? {}) as Record<string, number | null>;
+  const total = components.reduce((sum, component) => sum + (scores[component.id] ?? 0), 0);
+  const missing = components.some((component) => scores[component.id] == null);
+  const grade = missing ? null : (bands.find((band) => total >= band.min)?.grade ?? null);
+  return { subject: item.config.subject.name, components, scores, total: missing ? null : total, grade, remark: mark?.remark ?? null };
+}
+
 async function writeSnapshots(tx: Prisma.TransactionClient, sheetId: string, actorId: string) {
   const sheet = await tx.markSheet.findUnique({
     where: { id: sheetId },
@@ -104,26 +118,40 @@ async function writeSnapshots(tx: Prisma.TransactionClient, sheetId: string, act
   });
   if (!sheet) return;
   const bands = await tx.gradingBand.findMany({ orderBy: { min: "desc" } });
+  const published = await tx.markSheet.findMany({
+    where: {
+      status: "published",
+      config: { yearId: sheet.config.yearId, termLabel: sheet.config.termLabel, classId: sheet.config.classId },
+    },
+    include: { rows: true, config: { include: { subject: true } } },
+  });
+  const totals = new Map<string, number>();
+  for (const item of published) {
+    for (const mark of item.rows) {
+      const line = subjectLine({ ...item, rows: [mark] }, bands);
+      if (line.total == null) continue;
+      totals.set(mark.studentId, (totals.get(mark.studentId) ?? 0) + line.total);
+    }
+  }
+  const ranked = showsPosition(sheet.config.classRoom.level)
+    ? ranksWithTies([...totals].map(([id, total]) => ({ id, total })))
+    : new Map<string, number>();
+  const term = await tx.term.findFirst({ where: { yearId: sheet.config.yearId, label: sheet.config.termLabel } });
+  const classAttendance = term
+    ? await tx.attendance.findMany({ where: { classId: sheet.config.classId, termId: term.id } })
+    : [];
+  const daysOpen = new Set(classAttendance.map((row) => isoDate(row.date))).size;
   for (const row of sheet.rows) {
     const student = await tx.student.findUnique({ where: { id: row.studentId } });
     if (!student) continue;
-    const published = await tx.markSheet.findMany({
-      where: {
-        status: "published",
-        rows: { some: { studentId: student.id } },
-        config: { yearId: sheet.config.yearId, termLabel: sheet.config.termLabel, classId: sheet.config.classId },
-      },
-      include: { rows: { where: { studentId: student.id } }, config: { include: { subject: true } } },
+    const subjects = published.flatMap((item) => {
+      const rows = item.rows.filter((mark) => mark.studentId === student.id);
+      return rows.length ? [subjectLine({ ...item, rows }, bands)] : [];
     });
-    const subjects = published.map((item) => {
-      const mark = item.rows[0];
-      const components = item.config.components as { id: string; name: string; max: number }[];
-      const scores = (mark?.scores ?? {}) as Record<string, number | null>;
-      const total = components.reduce((sum, component) => sum + (scores[component.id] ?? 0), 0);
-      const missing = components.some((component) => scores[component.id] == null);
-      const grade = missing ? null : (bands.find((band) => total >= band.min)?.grade ?? null);
-      return { subject: item.config.subject.name, components, scores, total: missing ? null : total, grade, remark: mark?.remark ?? null };
-    });
+    const ownAttendance = classAttendance.filter((item) => item.studentId === student.id);
+    const termReport = term
+      ? await tx.termReport.findUnique({ where: { studentId_termId: { studentId: student.id, termId: term.id } } })
+      : null;
     const latest = await tx.reportCardSnapshot.findFirst({
       where: { studentId: student.id, yearLabel: sheet.config.year.label, termLabel: sheet.config.termLabel },
       orderBy: { version: "desc" },
@@ -139,10 +167,26 @@ async function writeSnapshots(tx: Prisma.TransactionClient, sheetId: string, act
           admissionNumber: student.admissionNumber,
           name: `${student.firstName} ${student.lastName}`,
           className: sheet.config.classRoom.name,
+          level: sheet.config.classRoom.level,
+          position: ranked.get(student.id) ?? null,
           subjects,
+          attendance: attendanceTotals(ownAttendance, daysOpen),
+          termReport: termReport
+            ? { remark: termReport.remark, conduct: termReport.conduct, attitude: termReport.attitude, interest: termReport.interest }
+            : null,
         },
       },
     });
+  }
+  for (const [studentId, position] of ranked) {
+    const latest = await tx.reportCardSnapshot.findFirst({
+      where: { studentId, yearLabel: sheet.config.year.label, termLabel: sheet.config.termLabel },
+      orderBy: { version: "desc" },
+    });
+    if (!latest) continue;
+    const payload = (latest.payload ?? {}) as Record<string, unknown>;
+    if (payload.position === position) continue;
+    await tx.reportCardSnapshot.update({ where: { id: latest.id }, data: { payload: { ...payload, position } } });
   }
 }
 

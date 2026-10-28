@@ -8,7 +8,17 @@ import { Surface } from "@/components/common/ui-bits";
 import { className, configForSheet, currentStaff, staffById, studentName, subjectName, summariseRow } from "@/lib/prototype/selectors";
 import { usePrototype } from "@/lib/prototype/store";
 
-export function ReportCardView({ studentId }: { studentId: string }) {
+export function ReportCardView({
+  studentId,
+  position,
+  attendance,
+  termReport,
+}: {
+  studentId: string;
+  position: number | null;
+  attendance: { present: number; absent: number; late: number; daysOpen: number } | null;
+  termReport: { remark: string; conduct: string; attitude: string; interest: string } | null;
+}) {
   const params = useSearchParams();
   const { state } = usePrototype();
   const student = state.students.find((item) => item.id === studentId);
@@ -28,8 +38,8 @@ export function ReportCardView({ studentId }: { studentId: string }) {
   if (!student || !staff || staff.role === "bursar") {
     return <Surface className="p-8 text-sm">This report card is not available.</Surface>;
   }
-  if (staff.role === "teacher" && !staff.classIds.includes(student.classId)) {
-    return <Surface className="p-8 text-sm">This class is outside your assignment.</Surface>;
+  if (staff.role === "teacher" && room?.teacherId !== staff.id) {
+    return <Surface className="p-8 text-sm">Report cards are available to the class teacher.</Surface>;
   }
 
   return (
@@ -105,13 +115,33 @@ export function ReportCardView({ studentId }: { studentId: string }) {
                 </table>
                 </div>
                 <p className="mt-2 text-sm">
-                  <span className="text-muted-foreground">Class teacher remark. </span>
+                  <span className="text-muted-foreground">Subject remark. </span>
                   {row.remark ?? " "}
                 </p>
               </section>
             );
           })
         )}
+        <section className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
+          {position != null ? (
+            <p>
+              <span className="text-muted-foreground">Position in class. </span>
+              {position}
+            </p>
+          ) : null}
+          {attendance ? (
+            <p>
+              <span className="text-muted-foreground">Attendance. </span>
+              Present {attendance.present}, absent {attendance.absent}, late {attendance.late}. Days open {attendance.daysOpen}.
+            </p>
+          ) : null}
+          {termReport ? (
+            <div className="sm:col-span-2">
+              <p><span className="text-muted-foreground">Class teacher remark. </span>{termReport.remark || " "}</p>
+              <p className="mt-1">Conduct {termReport.conduct || "—"} · Attitude {termReport.attitude || "—"} · Interest {termReport.interest || "—"}</p>
+            </div>
+          ) : null}
+        </section>
         <div className="mt-10 grid gap-8 sm:grid-cols-2">
           <div>
             <div className="h-px bg-navy" />

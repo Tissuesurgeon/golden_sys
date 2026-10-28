@@ -15,11 +15,7 @@ async function teacherOwnsStudent(user: CurrentUser, studentId: string) {
     include: { classRoom: true },
   });
   if (!enrollment) return false;
-  if (enrollment.classRoom.teacherId === user.staffId) return true;
-  const assignment = await prisma.teacherAssignment.findFirst({
-    where: { staffId: user.staffId, classId: enrollment.classId, yearId: enrollment.yearId },
-  });
-  return Boolean(assignment);
+  return enrollment.classRoom.teacherId === user.staffId;
 }
 
 function money(pesewas: number) {
@@ -89,9 +85,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ kin
     const snapshot = await prisma.reportCardSnapshot.findFirst({ where: { studentId: id }, orderBy: { version: "desc" }, include: { student: true } });
     if (!snapshot) return NextResponse.json({ error: "No published report card yet." }, { status: 404 });
     if (!(await teacherOwnsStudent(user, snapshot.studentId))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-    const payload = snapshot.payload as { name?: string; className?: string; subjects?: { subject: string; total: number | null; grade: string | null }[] };
+    const payload = snapshot.payload as {
+      name?: string;
+      className?: string;
+      level?: string;
+      position?: number | null;
+      subjects?: { subject: string; total: number | null; grade: string | null; remark?: string | null }[];
+      attendance?: { present: number; absent: number; late: number; daysOpen: number };
+      termReport?: { remark: string; conduct: string; attitude: string; interest: string } | null;
+    };
     const lines = [`${payload.name ?? snapshot.student.firstName} · ${snapshot.yearLabel} ${snapshot.termLabel}`, payload.className ?? "", `Version ${snapshot.version}`];
+    if (payload.position != null) lines.push(`Position ${payload.position}`);
     for (const subject of payload.subjects ?? []) lines.push(`${subject.subject}: ${subject.total ?? "—"} ${subject.grade ?? ""}`);
+    if (payload.attendance) {
+      lines.push(
+        `Attendance present ${payload.attendance.present}, absent ${payload.attendance.absent}, late ${payload.attendance.late}, days open ${payload.attendance.daysOpen}`,
+      );
+    }
+    if (payload.termReport?.remark) lines.push(`Class teacher: ${payload.termReport.remark}`);
+    if (payload.termReport?.conduct) lines.push(`Conduct ${payload.termReport.conduct}`);
+    if (payload.termReport?.attitude) lines.push(`Attitude ${payload.termReport.attitude}`);
+    if (payload.termReport?.interest) lines.push(`Interest ${payload.termReport.interest}`);
     return pdf("Report card", lines);
   }
 

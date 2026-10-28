@@ -32,7 +32,7 @@ export function LoginScreen() {
       setError(result.error);
       return;
     }
-    router.push("/dashboard");
+    router.push(result.role === "teacher" ? "/my" : "/dashboard");
     router.refresh();
   }
 

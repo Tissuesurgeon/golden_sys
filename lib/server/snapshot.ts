@@ -37,11 +37,16 @@ export async function loadOffice(user: CurrentUser, scope: OfficeScope, focusId?
   const wantsAllStaff = scope === "staff" || scope === "classes" || scope === "settings" || scope === "academics";
   const assignments = teacher && user.staffId ? await prisma.teacherAssignment.findMany({ where: { staffId: user.staffId } }) : [];
   const assignedClassIds = [...new Set(assignments.map((item) => item.classId))];
+  const homeClassIds =
+    teacher && user.staffId
+      ? (await prisma.classRoom.findMany({ where: { teacherId: user.staffId }, select: { id: true } })).map((room) => room.id)
+      : [];
+  const teacherClassIds = scope === "reports" ? homeClassIds : assignedClassIds;
   const studentWhere: Prisma.StudentWhereInput =
     teacher && !user.staffId
       ? { id: "__none__" }
       : teacher
-        ? { enrollments: { some: { active: true, classId: { in: assignedClassIds } } } }
+        ? { enrollments: { some: { active: true, classId: { in: teacherClassIds.length ? teacherClassIds : ["__none__"] } } } }
         : {};
   if (scope === "student" && focusId) studentWhere.id = focusId;
 
@@ -113,7 +118,13 @@ export async function loadOffice(user: CurrentUser, scope: OfficeScope, focusId?
     visibleStaff = [];
   }
 
-  if (teacher && user.staffId) {
+  if (teacher && user.staffId && scope === "reports") {
+    const homes = new Set(homeClassIds);
+    visibleStudents = students.filter((student) => student.enrollments.some((enrollment) => homes.has(enrollment.classId)));
+    visibleConfigs = configs.filter((config) => homes.has(config.classId));
+    visibleSheets = sheets.filter((sheet) => visibleConfigs.some((config) => config.id === sheet.configId));
+    visibleStaff = staffView.filter((member) => member.id === user.staffId);
+  } else if (teacher && user.staffId) {
     const mine = assignments.filter((item) => item.staffId === user.staffId);
     const classIds = new Set(mine.map((item) => item.classId));
     const keys = new Set(mine.map((item) => `${item.classId}:${item.subjectId}`));

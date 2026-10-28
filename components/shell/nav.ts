@@ -8,6 +8,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  UserRound,
   Users,
   Wallet,
 } from "lucide-react";
@@ -31,4 +32,13 @@ export const NAV = [
   { href: "/audit", label: "Audit Log", icon: Shield, roles: ["administrator"] as Role[] },
   { href: "/users", label: "Users and Permissions", icon: Shield, roles: ["administrator"] as Role[] },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["administrator"] as Role[] },
+  { href: "/account", label: "My Account", icon: UserRound, roles: everyone },
+];
+
+export const TEACHER_NAV = [
+  { href: "/my", label: "My Classes", icon: BookOpen, roles: ["teacher"] as Role[] },
+  { href: "/academics/marks", label: "Marks", icon: ClipboardList, roles: ["teacher"] as Role[] },
+  { href: "/attendance", label: "Attendance", icon: ClipboardList, roles: ["teacher"] as Role[] },
+  { href: "/report-cards", label: "Report Cards", icon: FileText, roles: ["teacher"] as Role[] },
+  { href: "/account", label: "My Account", icon: UserRound, roles: ["teacher"] as Role[] },
 ];

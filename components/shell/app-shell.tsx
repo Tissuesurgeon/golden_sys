@@ -9,7 +9,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { SchoolLogo } from "@/components/brand/school-logo";
-import { NAV } from "@/components/shell/nav";
+import { NAV, TEACHER_NAV } from "@/components/shell/nav";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,9 +34,10 @@ function NavLinks({ role, onNavigate }: { role: Role; onNavigate?: () => void })
 
   return (
     <nav className="flex flex-col gap-1 px-3" aria-label="Main">
-      {NAV.filter((item) => item.roles.includes(role)).map((item) => {
+      {(role === "teacher" ? TEACHER_NAV : NAV.filter((item) => item.roles.includes(role))).map((item) => {
+        const items = role === "teacher" ? TEACHER_NAV : NAV;
         const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
-        const longer = NAV.some((other) => other.href.length > item.href.length && (pathname === other.href || pathname.startsWith(`${other.href}/`)));
+        const longer = items.some((other) => other.href.length > item.href.length && (pathname === other.href || pathname.startsWith(`${other.href}/`)));
         const active = matches && !longer;
         const Icon = item.icon;
         return (

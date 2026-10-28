@@ -5,6 +5,7 @@ import { PageHeader, Surface, selectClassName } from "@/components/common/ui-bit
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { canConfigureAcademics } from "@/lib/prototype/permissions";
+import { setAssessmentDeadline } from "@/lib/server/teacher";
 import { className, currentStaff, subjectName } from "@/lib/prototype/selectors";
 import { usePrototype } from "@/lib/prototype/store";
 import type { AssessmentComponent } from "@/lib/prototype/types";
@@ -22,6 +23,7 @@ export function AssessmentConfigScreen() {
   const [classId, setClassId] = useState(state.classes[1]?.id ?? "");
   const [subjectId, setSubjectId] = useState(state.subjects[0]?.id ?? "");
   const [saved, setSaved] = useState("");
+  const [deadline, setDeadline] = useState("");
 
   const existing = state.configs.find(
     (config) => config.classId === classId && config.subjectId === subjectId && config.year === state.year && config.term === state.term,
@@ -152,6 +154,24 @@ export function AssessmentConfigScreen() {
             </ul>
           </div>
           {saved ? <p className="mt-3 text-sm text-success">{saved}</p> : null}
+          {existing ? (
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="block text-muted-foreground">Deadline</span>
+                <Input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} aria-label="Mark deadline" />
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  await setAssessmentDeadline(existing.id, deadline);
+                  setSaved(deadline ? "Deadline saved." : "Deadline cleared.");
+                }}
+              >
+                Save deadline
+              </Button>
+            </div>
+          ) : null}
           <Button
             className="mt-4"
             type="button"
