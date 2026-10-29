@@ -152,6 +152,9 @@ export function StudentProfile({ studentId }: { studentId: string }) {
           <TabsContent value="fees" className="mt-4 space-y-4">
             <div className="flex flex-wrap gap-2">
               <LinkButton href={`/fees/record?student=${student.id}`}>Record payment</LinkButton>
+              <LinkButton variant="outline" href={`/fees/bills?studentId=${student.id}`}>
+                Print fee bill
+              </LinkButton>
               <LinkButton variant="outline" href={`/fees/invoices/student?studentId=${student.id}`}>
                 Generate invoice
               </LinkButton>

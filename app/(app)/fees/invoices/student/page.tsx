@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
-import { confirmStudentInvoice, previewStudentInvoice } from "@/lib/server/billing";
+import { confirmStudentInvoice } from "@/lib/server/billing";
+import { previewStudentInvoice } from "@/lib/server/invoice-preview";
 import { requireInvoiceGeneration } from "@/lib/server/guard";
 
 export default async function StudentInvoicePage({
@@ -22,7 +23,7 @@ export default async function StudentInvoicePage({
   const termId = query.termId || year?.terms[0]?.id || "";
   const studentId = query.studentId || "";
   const preview = studentId && yearId && termId ? await previewStudentInvoice(studentId, yearId, termId) : null;
-  const ready = preview && !("error" in preview) && !preview.alreadyInvoiced && preview.lines.length > 0;
+  const ready = preview && !("error" in preview) && preview.lines.length > 0;
 
   return (
     <div>
@@ -52,18 +53,17 @@ export default async function StudentInvoicePage({
             {preview.name} · {preview.className} · {preview.audience === "new" ? "New" : "Returning"}
           </p>
           {preview.alreadyInvoiced ? (
-            <p className="mt-2 text-sm text-muted-foreground">Already invoiced as {preview.existingNumber}. A second invoice is not created.</p>
-          ) : (
-            <ul className="mt-3 space-y-1 text-sm">
-              {preview.lines.map((line) => (
-                <li key={`${line.label}-${line.amount}`} className="flex justify-between gap-3">
-                  <span>{line.label}</span>
-                  <span className="tabular-nums">{formatMoney(line.amount)}</span>
-                </li>
-              ))}
-              {preview.lines.length === 0 ? <li className="text-muted-foreground">No fee lines for this student.</li> : null}
-            </ul>
-          )}
+            <p className="mt-2 text-sm text-muted-foreground">Confirm updates {preview.existingNumber} to the current fees.</p>
+          ) : null}
+          <ul className="mt-3 space-y-1 text-sm">
+            {preview.lines.map((line) => (
+              <li key={`${line.label}-${line.amount}`} className="flex justify-between gap-3">
+                <span>{line.label}</span>
+                <span className="tabular-nums">{formatMoney(line.amount)}</span>
+              </li>
+            ))}
+            {preview.lines.length === 0 ? <li className="text-muted-foreground">No fee lines for this student.</li> : null}
+          </ul>
           <p className="mt-3 text-sm font-medium text-navy">Total {formatMoney(preview.total)}</p>
           <form action={confirmStudentInvoice} className="mt-4 grid gap-3">
             <input type="hidden" name="studentId" value={studentId} />

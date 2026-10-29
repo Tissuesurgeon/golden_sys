@@ -140,6 +140,25 @@ test("bursar generates term invoices", async ({ page }) => {
   }
 });
 
+test("bursar prints a fee bill", async ({ page }) => {
+  await signIn(page, "kwame.boateng@goldenchild.example");
+  await page.goto("/fees/bills?studentId=stu-adwoa");
+  await expect(page.getByRole("heading", { name: "Fee bills" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Fee bill" })).toBeVisible();
+  await expect(page.getByText("Adwoa Nyarko")).toBeVisible();
+  const studentHref = await page.getByRole("link", { name: "Download PDF" }).getAttribute("href");
+  const studentPdf = await page.request.get(studentHref ?? "");
+  expect(studentPdf.ok()).toBeTruthy();
+  expect(studentPdf.headers()["content-type"]).toContain("application/pdf");
+  expect((await studentPdf.body()).subarray(0, 4).toString()).toBe("%PDF");
+  await page.goto("/fees/bills?classId=cls-b4");
+  const classHref = await page.getByRole("link", { name: "Download class PDF" }).getAttribute("href");
+  const classPdf = await page.request.get(classHref ?? "");
+  expect(classPdf.ok()).toBeTruthy();
+  expect(classPdf.headers()["content-type"]).toContain("application/pdf");
+  expect((await classPdf.body()).subarray(0, 4).toString()).toBe("%PDF");
+});
+
 test("teacher marks attendance for their class", async ({ page }) => {
   await signIn(page, "efua.asante@goldenchild.example", /\/my/);
   await expect(page.getByRole("heading", { name: "My classes" })).toBeVisible();

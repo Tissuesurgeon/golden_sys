@@ -3,8 +3,11 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { isoDate } from "@/lib/calendar";
+import { paymentInstructions } from "@/lib/bills";
 import { invoiceBalance } from "@/lib/finance";
-import { pdfResponse, renderPdf } from "@/lib/pdf";
+import { formatDate } from "@/lib/format";
+import { pdfResponse, renderPdf, renderSchoolPdf, type PdfTable, type SchoolHeading } from "@/lib/pdf";
+import { composeClassBills, composeStudentBill } from "@/lib/server/fee-bill";
 
 async function teacherOwnsStudent(user: CurrentUser, studentId: string) {
   if (user.role === "administrator") return true;
@@ -27,7 +30,44 @@ async function pdf(title: string, lines: string[]) {
   return pdfResponse(title, await renderPdf(title, lines));
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ kind: string; id: string }> }) {
+async function schoolHeading(): Promise<SchoolHeading> {
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: "school" } });
+  return {
+    name: settings?.name ?? "Golden Child School",
+    address: settings?.address ?? "",
+    phone: settings?.phone ?? "",
+    email: settings?.email ?? "",
+  };
+}
+
+async function schoolPdf(title: string, tables: PdfTable[]) {
+  return pdfResponse(title, await renderSchoolPdf(await schoolHeading(), tables));
+}
+
+function billTable(bill: Exclude<Awaited<ReturnType<typeof composeStudentBill>>, { error: string }>): PdfTable {
+  const printed = formatDate(isoDate(new Date()));
+  return {
+    title: "FEE BILL",
+    lines: [
+      `${bill.term.year.label} ${bill.term.label}`,
+      `${bill.student.firstName} ${bill.student.lastName}`,
+      `Admission number ${bill.student.admissionNumber}`,
+      `Class ${bill.className}`,
+    ],
+    rows: [
+      ...bill.bill.lines.map((line) => ({ label: line.label, value: money(line.amount) })),
+      { label: "Balance brought forward", value: money(bill.bill.balanceBroughtForward) },
+      { label: "Total", value: money(bill.bill.total) },
+      { label: "Payments received", value: money(bill.bill.paid) },
+      ...(bill.bill.adjustments ? [{ label: "Adjustments", value: money(bill.bill.adjustments) }] : []),
+      { label: "Amount due", value: money(bill.bill.due), bold: true },
+      { label: "Due date", value: formatDate(isoDate(bill.dueOn)) },
+    ],
+    after: [paymentInstructions(bill.settings), `Printed ${printed}`],
+  };
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ kind: string; id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   const { kind, id } = await params;
@@ -36,24 +76,48 @@ export async function GET(_request: Request, { params }: { params: Promise<{ kin
     if (!can(user.role, "finance.read")) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     const payment = await prisma.payment.findUnique({ where: { id }, include: { student: true, allocations: true } });
     if (!payment) return NextResponse.json({ error: "Not found." }, { status: 404 });
-    return pdf("Receipt", [
-      payment.receiptNumber,
-      `Date ${isoDate(payment.paidOn)}`,
-      `Amount ${money(payment.amount)}`,
-      `Method ${payment.method.replaceAll("_", " ")}`,
-      payment.reference ? `Reference ${payment.reference}` : "No reference",
-      "Recorded by the school. Not verified by a payment gateway.",
-      payment.reversedAt ? "This receipt has been reversed." : "This receipt is a school record.",
-    ]);
+    const who = payment.student ? `${payment.student.firstName} ${payment.student.lastName}` : "School receipt";
+    return schoolPdf("Receipt", [{
+      title: "RECEIPT",
+      lines: [payment.receiptNumber, who, `Date ${formatDate(isoDate(payment.paidOn))}`, `Method ${payment.method.replaceAll("_", " ")}`, payment.reference ? `Reference ${payment.reference}` : "No reference"],
+      rows: [{ label: "Amount", value: money(payment.amount), bold: true }],
+      after: [payment.reversedAt ? "This receipt has been reversed." : "This receipt is a school record."],
+    }]);
   }
 
   if (kind === "invoice") {
     if (!can(user.role, "finance.read") && !can(user.role, "admissions.manage")) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     const invoice = await prisma.invoice.findUnique({ where: { id }, include: { items: true, student: true, application: true } });
     if (!invoice) return NextResponse.json({ error: "Not found." }, { status: 404 });
-    const lines = [invoice.number, `Issued ${isoDate(invoice.issuedOn)}`, invoice.student ? `${invoice.student.firstName} ${invoice.student.lastName}` : invoice.application ? `${invoice.application.firstName} ${invoice.application.lastName}` : ""];
-    for (const item of invoice.items) lines.push(`${item.label}  ${money(item.amount)}`);
-    return pdf("Invoice", lines.filter(Boolean));
+    const who = invoice.student
+      ? `${invoice.student.firstName} ${invoice.student.lastName}`
+      : invoice.application
+        ? `${invoice.application.firstName} ${invoice.application.lastName}`
+        : "";
+    const total = invoice.items.reduce((sum, item) => sum + item.amount, 0);
+    return schoolPdf("Invoice", [{
+      title: "INVOICE",
+      lines: [invoice.number, who, `Issued ${formatDate(isoDate(invoice.issuedOn))}`, invoice.termLabel].filter(Boolean),
+      rows: [
+        ...invoice.items.map((item) => ({ label: item.label, value: money(item.amount) })),
+        { label: "Total", value: money(total), bold: true },
+      ],
+    }]);
+  }
+
+  if (kind === "bill") {
+    if (!can(user.role, "invoices.generate")) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    const url = new URL(request.url);
+    const termId = url.searchParams.get("termId") || "";
+    if (!termId) return NextResponse.json({ error: "Choose a term." }, { status: 400 });
+    if (url.searchParams.get("scope") === "class") {
+      const bills = await composeClassBills(id, termId);
+      if ("error" in bills) return NextResponse.json({ error: bills.error }, { status: 404 });
+      return schoolPdf("Fee bills", bills.bills.map(billTable));
+    }
+    const bill = await composeStudentBill(id, termId);
+    if ("error" in bill) return NextResponse.json({ error: bill.error }, { status: 404 });
+    return schoolPdf("Fee bill", [billTable(bill)]);
   }
 
   if (kind === "statement") {
@@ -70,14 +134,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ kin
       },
       { charges: 0, adjustments: 0, paid: 0, balance: 0 },
     );
-    return pdf("Fee statement", [
-      student.admissionNumber,
-      `${student.firstName} ${student.lastName}`,
-      `Charges ${money(totals.charges)}`,
-      `Adjustments ${money(totals.adjustments)}`,
-      `Payments ${money(totals.paid)}`,
-      `Balance ${money(totals.balance)}`,
-    ]);
+    return schoolPdf("Fee statement", [{
+      title: "FEE STATEMENT",
+      lines: [`${student.firstName} ${student.lastName}`, `Admission number ${student.admissionNumber}`],
+      rows: [
+        { label: "Charges", value: money(totals.charges) },
+        { label: "Adjustments", value: money(totals.adjustments) },
+        { label: "Payments", value: money(totals.paid) },
+        { label: "Balance", value: money(totals.balance), bold: true },
+      ],
+    }]);
   }
 
   if (kind === "report") {

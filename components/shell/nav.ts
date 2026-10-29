@@ -22,6 +22,7 @@ export const NAV = [
   { href: "/students", label: "Students", icon: Users, roles: everyone },
   { href: "/guardians", label: "Parents and Guardians", icon: Users, roles: ["administrator", "bursar"] as Role[] },
   { href: "/fees", label: "Fees and Finance", icon: Wallet, roles: ["administrator", "bursar"] as Role[] },
+  { href: "/fees/bills", label: "Fee bills", icon: FileText, roles: ["administrator", "bursar"] as Role[] },
   { href: "/fees/invoices", label: "Invoices", icon: FileText, roles: ["administrator", "bursar"] as Role[] },
   { href: "/finance", label: "Finance report", icon: ScrollText, roles: ["administrator", "bursar"] as Role[] },
   { href: "/academics", label: "Academics", icon: BookOpen, roles: ["administrator", "teacher"] as Role[] },

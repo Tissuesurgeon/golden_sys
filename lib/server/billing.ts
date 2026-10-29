@@ -1,18 +1,15 @@
-"use server";
-
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { nextDocumentNumber } from "@/lib/audit";
-import { isoDate } from "@/lib/calendar";
 import { invoiceBalance } from "@/lib/finance";
-import { addDays, applicableFees, parseExtraLines, splitInvoiceRun, studentAudience, termInvoiceLines, type FeeAppliesTo, type TermSpan } from "@/lib/invoices";
+import { currentFeeLines, planInvoiceUpdate } from "@/lib/bills";
+import { addDays, parseExtraLines, studentAudience, type FeeAppliesTo, type TermSpan } from "@/lib/invoices";
+import { feesForClass } from "@/lib/server/invoice-preview";
 import { assertCan } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { requireInvoiceGeneration } from "@/lib/server/guard";
 import type { Prisma } from "@prisma/client";
-
-const openStatuses = ["issued", "partial", "overdue"] as const;
 
 async function officeUser(write: boolean) {
   const user = await requireUser();
@@ -21,6 +18,7 @@ async function officeUser(write: boolean) {
 }
 
 export async function saveDueDays(formData: FormData) {
+  "use server";
   const user = await officeUser(true);
   assertCan(user.role, "settings.manage");
   const days = Number(formData.get("invoiceDueDays") || 14);
@@ -34,6 +32,7 @@ export async function saveDueDays(formData: FormData) {
 }
 
 export async function saveFeeItem(formData: FormData) {
+  "use server";
   const user = await officeUser(true);
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
@@ -70,71 +69,8 @@ export async function saveFeeItem(formData: FormData) {
   redirect("/fees/items");
 }
 
-export async function previewTermInvoices(yearId: string, termId: string, classId: string, cohort: string) {
-  await requireInvoiceGeneration();
-  const term = await prisma.term.findUnique({ where: { id: termId }, include: { year: true } });
-  if (!term || term.yearId !== yearId) return [];
-  const audience = cohort === "new" || cohort === "returning" ? cohort : "both";
-  const [classes, terms, settings, existing] = await Promise.all([
-    prisma.classRoom.findMany({ where: classId && classId !== "all" ? { id: classId } : undefined, orderBy: { name: "asc" } }),
-    prisma.term.findMany({ select: { id: true, startsOn: true, endsOn: true } }),
-    prisma.schoolSettings.findUnique({ where: { id: "school" } }),
-    prisma.invoice.findMany({ where: { termId, kind: "school_fee" }, select: { studentId: true } }),
-  ]);
-  const taken = new Set(existing.map((invoice) => invoice.studentId).filter((id): id is string => Boolean(id)));
-  const rows = [];
-  for (const room of classes) {
-    const students = await prisma.student.findMany({
-      where: { status: "active", enrollments: { some: { classId: room.id, yearId, active: true } } },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    });
-    const fees = await feesForClass(prisma, room.id, termId);
-    for (const student of students) {
-      const group = studentAudience(student.enrolledOn, term, terms);
-      if (group === "not_enrolled") continue;
-      if (audience !== "both" && group !== audience) continue;
-      const arrears = await arrearsFor(student.id, term.startsOn);
-      const lines = termInvoiceLines(applicableFees(fees, group), arrears);
-      rows.push({
-        studentId: student.id,
-        name: `${student.firstName} ${student.lastName}`,
-        admissionNumber: student.admissionNumber,
-        className: room.name,
-        audience: group,
-        alreadyInvoiced: taken.has(student.id),
-        lines,
-        total: lines.reduce((sum, line) => sum + line.amount, 0),
-        dueOn: isoDate(addDays(term.startsOn, settings?.invoiceDueDays ?? 14)),
-      });
-    }
-  }
-  return rows;
-}
-
-async function feesForClass(db: Prisma.TransactionClient | typeof prisma, classId: string, termId: string) {
-  const items = await db.feeItem.findMany({
-    where: { active: true, kind: "school_fee" },
-    include: { schedules: { where: { classId, termId } }, classes: true },
-  });
-  return items
-    .filter((item) => item.classes.length === 0 || item.classes.some((link) => link.classId === classId))
-    .map((item) => ({ id: item.id, name: item.name, amount: item.schedules[0]?.amount ?? item.amount, appliesTo: item.appliesTo as FeeAppliesTo }));
-}
-
-async function arrearsFor(studentId: string, before: Date) {
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      studentId,
-      kind: "school_fee",
-      status: { in: [...openStatuses] },
-      issuedOn: { lt: before },
-    },
-    include: { items: true, adjustments: true, allocations: { include: { payment: true } } },
-  });
-  return invoices.reduce((sum, invoice) => sum + Math.max(0, invoiceBalance(invoice).balance), 0);
-}
-
 export async function confirmTermInvoices(formData: FormData) {
+  "use server";
   const user = await requireInvoiceGeneration();
   const yearId = String(formData.get("yearId") || "");
   const termId = String(formData.get("termId") || "");
@@ -147,33 +83,20 @@ export async function confirmTermInvoices(formData: FormData) {
   const dueOn = addDays(term.startsOn, settings?.invoiceDueDays ?? 14);
   const classes = await prisma.classRoom.findMany({ where: classId !== "all" ? { id: classId } : undefined });
   const terms = await prisma.term.findMany({ select: { id: true, startsOn: true, endsOn: true } });
-  let created = 0;
-  const skipped: string[] = [];
-  await prisma.$transaction(async (tx) => {
-    for (const room of classes) {
-      const students = await tx.student.findMany({
-        where: { status: "active", enrollments: { some: { classId: room.id, yearId, active: true } } },
-      });
-      const eligible = students.filter((student) => {
-        const group = studentAudience(student.enrolledOn, term, terms);
-        return group !== "not_enrolled" && (audience === "both" || group === audience);
-      });
-      const existing = await tx.invoice.findMany({
-        where: { studentId: { in: eligible.map((student) => student.id) }, termId, kind: "school_fee" },
-        select: { studentId: true },
-      });
-      const run = splitInvoiceRun(
-        eligible.map((student) => student.id),
-        new Set(existing.map((invoice) => invoice.studentId).filter((id): id is string => Boolean(id))),
-      );
-      skipped.push(...run.skipped);
-      const fees = await feesForClass(tx, room.id, termId);
-      for (const studentId of run.create) {
-        const student = eligible.find((item) => item.id === studentId);
-        if (!student) continue;
-        const group = studentAudience(student.enrolledOn, term, terms);
-        if (group === "not_enrolled") continue;
-        const made = await createTermInvoice(tx, user.id, {
+  const tally = { created: 0, updated: 0, unchanged: 0, skipped: 0 };
+  for (const room of classes) {
+    const students = await prisma.student.findMany({
+      where: { status: "active", enrollments: { some: { classId: room.id, yearId, active: true } } },
+    });
+    const fees = await feesForClass(prisma, room.id, termId);
+    for (const student of students) {
+      const group = studentAudience(student.enrolledOn, term, terms);
+      if (group === "not_enrolled" || (audience !== "both" && group !== audience)) {
+        tally.skipped += 1;
+        continue;
+      }
+      const made = await prisma.$transaction((tx) =>
+        createTermInvoice(tx, user.id, {
           student,
           classId: room.id,
           yearId,
@@ -182,48 +105,17 @@ export async function confirmTermInvoices(formData: FormData) {
           dueOn,
           fees,
           audience: group,
-        });
-        if (made.id) created += 1;
-      }
+        }),
+      );
+      tally[made.reason === "empty" ? "skipped" : made.reason] += 1;
     }
-  });
+  }
   revalidatePath("/fees/invoices");
-  redirect(`/fees/invoices?created=${created}&skipped=${skipped.length}`);
-}
-
-export async function previewStudentInvoice(studentId: string, yearId: string, termId: string) {
-  await requireInvoiceGeneration();
-  const [student, term, terms] = await Promise.all([
-    prisma.student.findUnique({
-      where: { id: studentId },
-      include: { enrollments: { where: { yearId, active: true }, include: { classRoom: true } } },
-    }),
-    prisma.term.findUnique({ where: { id: termId } }),
-    prisma.term.findMany({ select: { id: true, startsOn: true, endsOn: true } }),
-  ]);
-  if (!student || !term || term.yearId !== yearId) return null;
-  const enrollment = student.enrollments[0];
-  if (!enrollment) return { error: "This student is not enrolled for that year." };
-  const audience = studentAudience(student.enrolledOn, term, terms);
-  if (audience === "not_enrolled") return { error: "This student was not enrolled during that term." };
-  const existing = await prisma.invoice.findFirst({ where: { studentId, termId, kind: "school_fee" }, select: { id: true, number: true } });
-  const fees = applicableFees(await feesForClass(prisma, enrollment.classId, termId), audience);
-  const arrears = await arrearsFor(student.id, term.startsOn);
-  const lines = termInvoiceLines(fees, arrears);
-  return {
-    studentId,
-    name: `${student.firstName} ${student.lastName}`,
-    admissionNumber: student.admissionNumber,
-    className: enrollment.classRoom.name,
-    audience,
-    alreadyInvoiced: Boolean(existing),
-    existingNumber: existing?.number ?? "",
-    lines,
-    total: lines.reduce((sum, line) => sum + line.amount, 0),
-  };
+  redirect(`/fees/invoices?created=${tally.created}&updated=${tally.updated}&unchanged=${tally.unchanged}&skipped=${tally.skipped}`);
 }
 
 export async function confirmStudentInvoice(formData: FormData) {
+  "use server";
   const user = await requireInvoiceGeneration();
   const studentId = String(formData.get("studentId") || "");
   const yearId = String(formData.get("yearId") || "");
@@ -263,8 +155,7 @@ export async function confirmStudentInvoice(formData: FormData) {
     });
   });
   if (!invoiceId.id) {
-    const message = invoiceId.reason === "duplicate" ? "This student already has an invoice for that term." : "There are no fees for this student in that term.";
-    redirect(`${back}&error=${encodeURIComponent(message)}`);
+    redirect(`${back}&error=${encodeURIComponent("There are no fees for this student in that term.")}`);
   }
   revalidatePath("/fees/invoices");
   revalidatePath(`/students/${studentId}`);
@@ -272,6 +163,7 @@ export async function confirmStudentInvoice(formData: FormData) {
 }
 
 export async function generateFirstTermInvoice(formData: FormData) {
+  "use server";
   const user = await requireInvoiceGeneration();
   const applicationId = String(formData.get("applicationId") || "");
   const application = await prisma.admissionApplication.findUnique({
@@ -299,8 +191,7 @@ export async function generateFirstTermInvoice(formData: FormData) {
     });
   });
   if (!invoiceId.id) {
-    const message = invoiceId.reason === "duplicate" ? "A first-term invoice already exists for this student." : "There are no new-student fees for this class.";
-    redirect(`/admissions/${applicationId}?error=${encodeURIComponent(message)}`);
+    redirect(`/admissions/${applicationId}?error=${encodeURIComponent("There are no new-student fees for this class.")}`);
   }
   revalidatePath(`/admissions/${applicationId}`);
   revalidatePath("/fees/invoices");
@@ -323,50 +214,83 @@ async function createTermInvoice(
     notes?: string;
   },
 ) {
-  const existing = await tx.invoice.findFirst({ where: { studentId: input.student.id, termId: input.term.id, kind: "school_fee" }, select: { id: true } });
-  if (existing) return { id: null, reason: "duplicate" as const };
-  const prior = await tx.invoice.findMany({
-    where: { studentId: input.student.id, kind: "school_fee", status: { in: [...openStatuses] }, issuedOn: { lt: input.term.startsOn } },
-    include: { items: true, adjustments: true, allocations: { include: { payment: true } } },
+  const lines = [...currentFeeLines(input.fees, input.audience), ...(input.extras ?? [])];
+  const existing = await tx.invoice.findFirst({
+    where: { studentId: input.student.id, termId: input.term.id, kind: "school_fee", status: { notIn: ["cancelled", "reversed"] } },
+    include: { items: true, allocations: { include: { payment: true } } },
   });
-  const arrears = prior.reduce((sum, invoice) => sum + Math.max(0, invoiceBalance(invoice).balance), 0);
-  const lines = termInvoiceLines(applicableFees(input.fees, input.audience), arrears, input.extras ?? []);
-  if (lines.length === 0) return { id: null, reason: "empty" as const };
-  const number = await nextDocumentNumber(tx, "invoice", new Date());
-  const invoice = await tx.invoice.create({
-    data: {
-      number,
-      kind: "school_fee",
-      status: "issued",
-      studentId: input.student.id,
-      yearId: input.yearId,
-      termId: input.term.id,
-      termLabel: input.term.label,
-      issuedOn: new Date(),
-      dueOn: input.dueOn,
-      notes: input.notes ?? "",
-      items: { create: lines.map((line) => ({ label: line.label, amount: line.amount, feeItemId: line.feeItemId })) },
-    },
-  });
-  if (arrears > 0) {
-    await tx.invoice.updateMany({
-      where: { id: { in: prior.map((item) => item.id) } },
-      data: { status: "carried_forward", carriedToInvoiceId: invoice.id },
+  const name = `${input.student.firstName} ${input.student.lastName}`;
+  if (!existing) {
+    if (lines.length === 0) return { id: null, reason: "empty" as const };
+    const number = await nextDocumentNumber(tx, "invoice", new Date());
+    const invoice = await tx.invoice.create({
+      data: {
+        number,
+        kind: "school_fee",
+        status: "issued",
+        studentId: input.student.id,
+        yearId: input.yearId,
+        termId: input.term.id,
+        termLabel: input.term.label,
+        issuedOn: new Date(),
+        dueOn: input.dueOn,
+        notes: input.notes ?? "",
+        items: { create: lines.map((line) => ({ label: line.label, amount: line.amount, feeItemId: line.feeItemId })) },
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: "invoice.generated",
+        entityType: "Invoice",
+        entityId: invoice.id,
+        summary: `${number} for ${name} (${input.audience === "new" ? "new" : "returning"})`,
+      },
+    });
+    return { id: invoice.id, reason: "created" as const };
+  }
+  const hasPayments = existing.allocations.some((item) => !item.payment.reversedAt && item.amount > 0);
+  const plan = planInvoiceUpdate(existing.items, lines, hasPayments);
+  if (plan.action === "unchanged") return { id: existing.id, reason: "unchanged" as const };
+  if (plan.action === "replace") {
+    await tx.invoiceItem.deleteMany({ where: { invoiceId: existing.id } });
+    if (plan.lines.length > 0) {
+      await tx.invoiceItem.createMany({
+        data: plan.lines.map((line) => ({ invoiceId: existing.id, label: line.label, amount: line.amount, feeItemId: line.feeItemId })),
+      });
+    }
+  } else {
+    await tx.invoiceItem.create({
+      data: { invoiceId: existing.id, label: plan.line.label, amount: plan.line.amount, feeItemId: plan.line.feeItemId },
     });
   }
+  if (input.notes) await tx.invoice.update({ where: { id: existing.id }, data: { notes: input.notes } });
+  await refreshInvoiceStatus(tx, existing.id);
   await tx.auditLog.create({
     data: {
       actorId,
-      action: "invoice.generated",
+      action: "invoice.updated",
       entityType: "Invoice",
-      entityId: invoice.id,
-      summary: `${number} for ${input.student.firstName} ${input.student.lastName} (${input.audience === "new" ? "new" : "returning"})`,
+      entityId: existing.id,
+      summary: `Updated ${existing.number} for ${name} to the current fees`,
     },
   });
-  return { id: invoice.id, reason: "created" as const };
+  return { id: existing.id, reason: "updated" as const };
+}
+
+async function refreshInvoiceStatus(tx: Prisma.TransactionClient, invoiceId: string) {
+  const invoice = await tx.invoice.findUnique({
+    where: { id: invoiceId },
+    include: { items: true, adjustments: true, allocations: { include: { payment: true } } },
+  });
+  if (!invoice || invoice.status === "cancelled" || invoice.status === "reversed" || invoice.status === "carried_forward") return;
+  const balance = invoiceBalance(invoice);
+  const status = balance.paid <= 0 ? "issued" : balance.balance <= 0 ? "paid" : "partial";
+  if (status !== invoice.status) await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
 }
 
 export async function cancelInvoice(formData: FormData) {
+  "use server";
   const user = await requireUser();
   assertCan(user.role, "settings.manage");
   const id = String(formData.get("id") || "");

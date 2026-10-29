@@ -68,6 +68,7 @@ export function FeesOverview() {
           canRecordPayments(staff.role) ? (
             <>
               <LinkButton href="/fees/items" variant="outline">Fee items</LinkButton>
+              <LinkButton href="/fees/bills" variant="outline">Fee bills</LinkButton>
               <LinkButton href="/fees/invoices" variant="outline">Invoices</LinkButton>
               <LinkButton href="/fees/record">Record payment</LinkButton>
             </>

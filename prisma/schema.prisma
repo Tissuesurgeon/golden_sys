@@ -420,7 +420,8 @@ model Invoice {
   adjustments   Adjustment[]
   createdAt     DateTime             @default(now())
 
-  @@unique([studentId, termId, kind])
+  // Active invoices are unique on (studentId, termId, kind). The partial index is in SQL
+  // so a cancelled or reversed invoice does not block a new bill.
   @@index([studentId])
   @@index([applicationId])
   @@index([yearId])

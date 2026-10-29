@@ -12,7 +12,7 @@ import { requireFinance } from "@/lib/server/guard";
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ termId?: string; classId?: string; status?: string; q?: string; created?: string; skipped?: string }>;
+  searchParams: Promise<{ termId?: string; classId?: string; status?: string; q?: string; created?: string; updated?: string; unchanged?: string; skipped?: string }>;
 }) {
   const user = await requireFinance();
   const query = await searchParams;
@@ -49,15 +49,20 @@ export default async function InvoicesPage({
     <div>
       <PageHeader
         title="Invoices"
-        description="Term bills, arrears carried forward, and what is still open."
+        description="Stored term invoices. A fee bill prints the current fees, including any balance from an earlier term."
         actions={can(user.role, "invoices.generate") ? (
           <>
+            <LinkButton href="/fees/bills" variant="outline">Fee bills</LinkButton>
             <LinkButton href="/fees/invoices/generate">Generate term invoices</LinkButton>
             <LinkButton href="/fees/invoices/student" variant="outline">Generate invoice</LinkButton>
           </>
         ) : null}
       />
-      {query.created ? <p className="mb-4 text-sm text-navy">Created {query.created}. Skipped {query.skipped ?? 0} students who already had this term invoice.</p> : null}
+      {query.created || query.updated || query.unchanged || query.skipped ? (
+        <p className="mb-4 text-sm text-navy">
+          Created {query.created ?? 0}. Updated {query.updated ?? 0}. Unchanged {query.unchanged ?? 0}. Skipped {query.skipped ?? 0} (not enrolled that term, outside the filter, or no fees).
+        </p>
+      ) : null}
       <Surface className="mb-4 p-5">
         <form className="grid gap-3 sm:grid-cols-5">
           <select className={selectClassName()} name="termId" defaultValue={query.termId || ""} aria-label="Term">

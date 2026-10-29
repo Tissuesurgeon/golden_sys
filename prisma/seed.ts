@@ -235,6 +235,7 @@ async function main() {
           status: "issued",
           studentId,
           yearId: yearId(year),
+          termId: termId(year, term),
           termLabel: term,
           issuedOn: dateOnly(charges[0].issuedOn),
           items: { create: charges.map((charge) => ({ id: charge.id, label: charge.label, amount: charge.amount })) },
@@ -313,6 +314,13 @@ async function main() {
       }
     }
     await tx.feeItem.create({ data: { name: "Admission fee", amount: 50000, kind: "admission", active: true, appliesTo: "new" } });
+    const currentTermId = termId(state.school.academicYear, state.school.currentTerm);
+    const schoolFees = await tx.feeItem.findMany({ where: { kind: "school_fee" }, include: { classes: true } });
+    for (const fee of schoolFees) {
+      for (const link of fee.classes) {
+        await tx.feeSchedule.create({ data: { feeItemId: fee.id, classId: link.classId, termId: currentTermId, amount: fee.amount } });
+      }
+    }
 
     for (const config of state.configs) {
       await tx.assessmentConfig.create({

@@ -2,7 +2,8 @@ import { PageHeader, Surface, selectClassName } from "@/components/common/ui-bit
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
-import { confirmTermInvoices, previewTermInvoices } from "@/lib/server/billing";
+import { confirmTermInvoices } from "@/lib/server/billing";
+import { previewTermInvoices } from "@/lib/server/invoice-preview";
 import { requireInvoiceGeneration } from "@/lib/server/guard";
 
 export default async function GenerateInvoicesPage({
@@ -22,12 +23,12 @@ export default async function GenerateInvoicesPage({
   const classId = query.classId || "all";
   const cohort = query.cohort === "new" || query.cohort === "returning" ? query.cohort : "both";
   const preview = yearId && termId ? await previewTermInvoices(yearId, termId, classId, cohort) : [];
-  const billable = preview.filter((row) => !row.alreadyInvoiced && row.lines.length > 0);
+  const billable = preview.filter((row) => row.lines.length > 0);
   const grand = billable.reduce((sum, row) => sum + row.total, 0);
 
   return (
     <div>
-      <PageHeader title="Generate term invoices" description="One invoice per student for the term. New students are charged new and shared fees. Returning students are charged returning and shared fees. A second run skips anyone who already has one." />
+      <PageHeader title="Generate term invoices" description="One stored invoice per student for the term. Confirm again after a fee change and the stored invoice is updated. Arrears stay on the fee bill and are not copied onto the next invoice." />
       {query.error ? <p className="mb-4 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">{query.error}</p> : null}
       <Surface className="mb-4 p-5">
         <form className="grid gap-3 sm:grid-cols-5">
@@ -65,7 +66,7 @@ export default async function GenerateInvoicesPage({
               <tr key={row.studentId} className="border-b border-border">
                 <td className="px-4 py-3">{row.name}<div className="text-xs text-muted-foreground">{row.admissionNumber}</div></td>
                 <td className="px-4 py-3">{row.className}</td>
-                <td className="px-4 py-3">{row.alreadyInvoiced ? "Already invoiced" : row.audience === "new" ? "New" : "Returning"}</td>
+                <td className="px-4 py-3">{row.audience === "new" ? "New" : "Returning"}{row.alreadyInvoiced ? " · will update" : ""}</td>
                 <td className="px-4 py-3">{row.lines.map((line) => line.label).join(", ") || "No lines"}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{formatMoney(row.total)}</td>
               </tr>
